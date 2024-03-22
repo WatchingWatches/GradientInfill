@@ -1,18 +1,50 @@
 #!/usr/bin/env python3
 """
 Gradient Infill for 3D prints.
+Orca slicer
 
 License: MIT
 Author: Stefan Hermann - CNC Kitchen
+Fork Author: Benedikt Jansson - WatchingWatches
 Version: 1.0
 """
 import re
+import sys
 from collections import namedtuple
 from enum import Enum
 from typing import List, Tuple
+import traceback
 
 __version__ = '1.0'
 
+""" Status comments:
+- fine: no changes needed
+- changed: adapted to different slicer
+
+Only accepts G1/G0 commands and relative extrusion
+Please read the README.md for slicer settings guide
+
+    
+Features:
+    first line gets removed with slicer information
+        solves issue with incorrect gcode preview in Prusa gcode viewer
+        
+    run the script directly after slicing with input dialog for script variables
+    
+    warns you if no changes were made to the file
+    
+    gives error message inside of the terminal
+    
+Future Features:
+    #TODO
+    give warnings if G2/G3 are used and not realative extrusion
+    automatically search for infill type
+    
+    
+Known Issues: #TODO
+    M73 P1 R39 changed position
+    same G1 F command inserted twice
+"""
 
 class InfillType(Enum):
     """Enum for infill type."""
@@ -25,9 +57,15 @@ Point2D = namedtuple('Point2D', 'x y')
 Segment = namedtuple('Segment', 'point1 point2')
 
 # EDIT this section for your creation parameters
+# if the filenames have the same name the original file will be overwritten
+# names only used if run_in_slicer = False
+INPUT_FILE_NAME = "test_test.gcode"
+OUTPUT_FILE_NAME = "orca_script_result.gcode"
 
-INPUT_FILE_NAME = "cura_test_gradientinfill.gcode"
-OUTPUT_FILE_NAME = "cura_script_test.gcode"
+# The run in slicer option doesn't work yet
+run_in_slicer = False
+dialog_in_slicer = False # use different parameters inside of the slicer via dialog
+SLICER_OUTPUT_FILE_NAME = "orca_script.gcode" # name of the output file
 
 INFILL_TYPE = InfillType.SMALL_SEGMENTS
 
@@ -39,6 +77,8 @@ GRADIENT_DISCRETIZATION = 4.0  # only applicable for linear infills; number of s
 
 # End edit
 
+# insert into function to make it faster
+
 
 class Section(Enum):
     """Enum for section type."""
@@ -47,7 +87,7 @@ class Section(Enum):
     INNER_WALL = 1
     INFILL = 2
 
-
+# fine
 def dist(segment: Segment, point: Point2D) -> float:
     """Calculate the distance from a point to a line with finite length.
 
@@ -73,7 +113,7 @@ def dist(segment: Segment, point: Point2D) -> float:
 
     return (dx * dx + dy * dy) ** 0.5
 
-
+# fine
 def get_points_distance(point1: Point2D, point2: Point2D) -> float:
     """Calculate the euclidean distance between two points.
 
@@ -86,7 +126,7 @@ def get_points_distance(point1: Point2D, point2: Point2D) -> float:
     """
     return ((point1.x - point2.x) ** 2 + (point1.y - point2.y) ** 2) ** 0.5
 
-
+# fine
 def min_distance_from_segment(segment: Segment, segments: List[Segment]) -> float:
     """Calculate the minimum distance from the midpoint of ``segment`` to the nearest segment in ``segments``.
 
@@ -101,6 +141,9 @@ def min_distance_from_segment(segment: Segment, segments: List[Segment]) -> floa
 
     return min(dist(s, middlePoint) for s in segments)
 
+# use re.compile to make it quicker
+prog_searchX = re.compile(r"X(\d*\.?\d*)")
+prog_searchY = re.compile(r"Y(\d*\.?\d*)")
 
 def getXY(currentLine: str) -> Point2D:
     """Create a ``Point2D`` object from a gcode line.
@@ -114,15 +157,21 @@ def getXY(currentLine: str) -> Point2D:
     Returns:
         Point2D: the parsed coordinates
     """
-    searchX = re.search(r"X(\d*\.?\d*)", currentLine)
-    searchY = re.search(r"Y(\d*\.?\d*)", currentLine)
+    #searchX = re.search(r"X(\d*\.?\d*)", currentLine)
+    #searchY = re.search(r"Y(\d*\.?\d*)", currentLine)
+    
+    searchX = prog_searchX.search(currentLine)
+    searchY = prog_searchY.search(currentLine)
+    
     if searchX and searchY:
         elementX = searchX.group(1)
         elementY = searchY.group(1)
     else:
         raise SyntaxError(f'Gcode file parsing error for line {currentLine}')
-
+        
+    
     return Point2D(float(elementX), float(elementY))
+    
 
 
 def mapRange(a: Tuple[float, float], b: Tuple[float, float], s: float) -> float:
@@ -158,7 +207,7 @@ def get_extrusion_command(x: float, y: float, extrusion: float) -> str:
     """
     return "G1 X{} Y{} E{}\n".format(round(x, 3), round(y, 3), round(extrusion, 5))
 
-
+# changed
 def is_begin_layer_line(line: str) -> bool:
     """Check if current line is the start of a layer section.
 
@@ -168,9 +217,9 @@ def is_begin_layer_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of a layer section
     """
-    return line.startswith(";LAYER:")
+    return line.startswith(";LAYER_CHANGE")
 
-
+# changed
 def is_begin_inner_wall_line(line: str) -> bool:
     """Check if current line is the start of an inner wall section.
 
@@ -180,9 +229,9 @@ def is_begin_inner_wall_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of an inner wall section
     """
-    return line.startswith(";TYPE:WALL-INNER")
+    return line.startswith(";TYPE:Inner wall")
 
-
+# changed
 def is_end_inner_wall_line(line: str) -> bool:
     """Check if current line is the start of an outer wall section.
 
@@ -192,9 +241,9 @@ def is_end_inner_wall_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of an outer wall section
     """
-    return line.startswith(";TYPE:WALL-OUTER")
+    return line.startswith(";TYPE:Outer wall")
 
-
+# fine
 def is_extrusion_line(line: str) -> bool:
     """Check if current line is a standard printing segment.
 
@@ -206,7 +255,7 @@ def is_extrusion_line(line: str) -> bool:
     """
     return "G1" in line and " X" in line and "Y" in line and "E" in line
 
-
+# changed
 def is_begin_infill_segment_line(line: str) -> bool:
     """Check if current line is the start of an infill.
 
@@ -216,9 +265,10 @@ def is_begin_infill_segment_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of an infill section
     """
-    return line.startswith(";TYPE:FILL")
+    return line.startswith(";TYPE:Sparse infill")
 
-
+edit = 0
+# change to use search patterns instead of finding elements in string
 def process_gcode(
     input_file_name: str,
     output_file_name: str,
@@ -229,14 +279,23 @@ def process_gcode(
     gradient_discretization: float,
 ) -> None:
     """Parse input Gcode file and modify infill portions with an extrusion width gradient."""
+    global edit
+    prog_move = re.compile(r'^G[0-1].*X.*Y')
+    prog_extrusion = re.compile(r'^G1.*X.*Y.*E')
+    
     currentSection = Section.NOTHING
     lastPosition = Point2D(-10000, -10000)
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
 
     with open(input_file_name, "r") as gcodeFile, open(output_file_name, "w+") as outputFile:
+        first_line = True # delete first line due to incorrect gcode preview
         for currentLine in gcodeFile:
+            if first_line:
+                first_line = False
+                continue
+            
             writtenToFile = 0
-            print(currentLine+'helo!!!')
+            
             if is_begin_layer_line(currentLine):
                 perimeterSegments = []
 
@@ -263,7 +322,7 @@ def process_gcode(
                         outputFile.write("G1 F{}\n".format(searchSpeed.group(1)))
                     else:
                         raise SyntaxError(f'Gcode file parsing error for line {currentLine}')
-                if "E" in currentLine and "G1" in currentLine and " X" in currentLine and "Y" in currentLine:
+                if prog_extrusion.search(currentLine):
                     currentPosition = getXY(currentLine)
                     splitLine = currentLine.split(" ")
 
@@ -337,19 +396,89 @@ def process_gcode(
                             outPutLine = outPutLine + "\n"
                             outputFile.write(outPutLine)
                             writtenToFile = 1
-                if ";" in currentLine:
-                    currentSection = Section.NOTHING
+                            
+                # infill type resetted broke the script
+                # this was probably used as a "safety" feature
+                #if ";" in currentLine:
+                #    currentSection = Section.NOTHING
 
             # line with move
-            if " X" in currentLine and " Y" in currentLine and ("G1" in currentLine or "G0" in currentLine):
+            if prog_move.search(currentLine):
                 lastPosition = getXY(currentLine)
 
             # write uneditedLine
             if writtenToFile == 0:
                 outputFile.write(currentLine)
+            else:
+                edit += 1
+        
+        # check if the script did anything
+        if edit== 0:
+            print('No changes were made to the file! Press enter and check the script')
+            if run_in_slicer:
+                input()
 
 
-if __name__ == '__main__':
-    process_gcode(
-        INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
-    )
+#if __name__ == '__main__':
+#    process_gcode(
+#        INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
+#    )
+
+# use try method to get error message from script
+try:
+    if run_in_slicer:
+        file_path = sys.argv[1] # the path of the gcode given by the slicer
+        
+        
+        if dialog_in_slicer:
+            # repeat process up to 3 times if inserted values are incorrect
+            for _ in range(3):
+                print('script called:', sys.argv[0],'\n')
+                print('Use default values (declared in the script)? [y] to proceed')
+                default = str(input())
+                if default == 'y':
+                    break
+                
+                print('Input MAX_FLOW and press enter (default 350)')
+                MAX_FLOW = int(input())
+                
+                print('Input MIN_FLOW and press enter (default(50)')
+                MIN_FLOW = int(input())
+                
+                print('Input GRADIENT_THICKNESS and press enter (default(6.0)')
+                GRADIENT_THICKNESS = float(input())
+                
+                print('Input GRADIENT_DISCRETIZATION and press enter (default(4.0)')
+                GRADIENT_DISCRETIZATION = float(input())
+                
+                print('Input INFILL_TYPE choose [0] for SMALL_SEGMENTS and [1] for LINEAR:')
+                choose_infill_type = int(input())
+                if choose_infill_type == 0:
+                    INFILL_TYPE = InfillType.SMALL_SEGMENTS
+                else:
+                    INFILL_TYPE = InfillType.LINEAR
+                    
+                print('Are all values correct? [y] to proceed')
+                correct = str(input())
+                
+                if correct == 'y':
+                    break
+            
+        # changed out path
+        process_gcode(
+            file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
+        )
+        
+    else:
+        process_gcode(
+            INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
+        )
+        
+except Exception:
+    traceback.print_exc()
+    if run_in_slicer:
+        print('Press enter to close window')
+        print('If you need help open an issue on my Github at:https://github.com/WatchingWatches')
+        print('Please share all of the settings yo were using and the error message')
+        input()
+    
