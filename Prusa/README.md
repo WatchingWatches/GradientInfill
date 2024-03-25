@@ -26,12 +26,12 @@ This is a fork of the repository of CNC-Kitchen. I didn't change the working pri
 Insert the path to your python.exe followed by the path to the python script in print settings -> output options.
 
 ## Running script:
-**Do not upload the gcode file directly to your printer**. The output of the script are two gcodes. One file is the unmodifyed gcode of the slicer and the other is the modifyed one. Only the unmodifyed version will be uploaded to your printer.
+**Do not upload the gcode file directly to your printer**. The output of the script are two gcodes. One file is the unmodifyed gcode of the slicer and the other is the modifyed one. Only the unmodifyed version will be uploaded to your printer (my expirience with Mainsail).
 
 The preview inside of the slicer doesn't show the changes of the script.
 
 ### Investigate the modifyed gcode (recommended):
-The following steps are recommended and should be perfomed evrytime, until you trust the script. There might be errors specific to your gcode, which i haven't thought of. Those could potentially damage your printer.
+The following steps are recommended and should be perfomed everytime, until you trust the script. There might be errors specific to your gcode, which i haven't thought of. Those could potentially damage your printer.
 
 Open the file inside of the Prusa gcode viewer, to take a look at the modifyed gcode. If you are not happy with the result run the script again with different parameters. You can refresh the gcode preview by pressing F5.
 ![alt text](pictures/image-3.png)

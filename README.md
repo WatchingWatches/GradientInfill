@@ -1,4 +1,11 @@
-# GradientInfill
+# GradientInfill supported slicers
+The original script can be found in the mainfolder, which works with Cura.
+
+I adapted the script to work with Prusa and Orca slicer. Both scripts have a own folder with detailed instructions inside of the README file.
+
+The following part of the README is unmodifyed by me and gives an introduction of what the script does.
+
+# Gradientinfill
 ![alt text](https://static1.squarespace.com/static/5d88f1f13db677155dee50fa/t/5e184edf208b5e01f31462a2/1578651390859/vlcsnap-2020-01-10-11h15m40s688.png?format=2500w)
 
 This a Python script that post-processes existing G-Code to add gradient infill for 3D prints.

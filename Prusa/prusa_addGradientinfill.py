@@ -78,6 +78,7 @@ SLICER_OUTPUT_FILE_NAME = "prusa_script_result101.gcode" # name of the output fi
 
 INFILL_TYPE = InfillType.SMALL_SEGMENTS
 
+# the following values will be used as daefault values if run_in_slicer = True
 MAX_FLOW = 350.0  # maximum extrusion flow
 MIN_FLOW = 50.0  # minimum extrusion flow
 GRADIENT_THICKNESS = 6.0  # thickness of the gradient (max to min) in mm
@@ -85,8 +86,6 @@ GRADIENT_DISCRETIZATION = 4.0  # only applicable for linear infills; number of s
 # gradient(segmentLength=gradientThickness / gradientDiscretization); use sensible values to not overload the printer
 
 # End edit
-
-# insert into function to make it faster
 
 
 class Section(Enum):
