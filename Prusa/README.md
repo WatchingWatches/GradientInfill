@@ -14,11 +14,15 @@ This is a fork of the repository of CNC-Kitchen. I didn't change the working pri
 
 ## Slicer settings (enable expert mode):
 ### Disable Arc fitting in print settings-> advanced:
-![alt text](pictures/image.png)
+![alt text](<pictures/Screenshot 2024-03-21 231928.png>)
 
 ### Use relative extrusion in printer settings-> general:
 
-![alt text](pictures/image-1.png)
+![Relative extrusion](<pictures/Screenshot 2024-03-21 232256.png>)
+
+### Infill before perimiter need to be turned off printer settings-> infill:
+
+![Infill](pictures/image.png)
 
 ### Automatically call script when saving the file:
 ![alt text](pictures/image-2.png)
