@@ -51,9 +51,6 @@ Print small test pieces to test your settings. If you modify a big file the comp
 I will try to optimise the calculation time of the script. Once i have enough confidence in the program, i will add the option to only get one output file.
 With your help i will debug the script for errors, which might occur.
 
-### Orca slicer:
-I am also working on a version for Orca slicer, but did have some unexpected problems. The general script seems to work, but calling it from the slicer doesn't work yet. The gcode preview doesn't seem to work in any previewer tested so far. I will add the script to a different folder in this repository, once i found the issues.
-
 You may also be interested in my own postprocessing scripts, which can be found [here](https://github.com/WatchingWatches/Post_processing_gcode).
 
 Thank you for you feedback in advance. Also feel free to adapt the script to other slicers too.
