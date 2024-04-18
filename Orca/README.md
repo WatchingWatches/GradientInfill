@@ -10,6 +10,7 @@ This is a fork of the repository of CNC-Kitchen. I didn't change the working pri
 It's difficult to see the different line width of the infill on the picture. The test piece also needs to be large enough.
 ![first example](pictures/IMG_20240321_223411411.jpg)
 
+![different line width](pictures/gcode_preview.png)
 ## Features:
 - The script can be called directly after slicing with an optional dialog in the terminal, which will automatically open (``run_in_slicer = True``)
 - It's also possible to run the script inside of an IDE (``run_in_slicer = False``)
@@ -40,6 +41,7 @@ This means, that the preview inside of the slicer doesn't show the changes of th
 ### Investigate the modifyed gcode (recommended):
 The following steps are recommended and should be perfomed everytime, until you trust the script. There might be errors specific to your gcode, which i haven't thought of. Those could potentially damage your printer.
 
+Open the file inside of a gcode viewer, to take a look at the modifyed gcode. Select the line width color scheme to see the difference. 
 Open the two files inside of notepad++ and compare both files with a plugin called "compare". The program will mark all of the changes in between both files. This is the safest check, since the gcode previewer can give a wrong impression.
 
 ## General advice:
