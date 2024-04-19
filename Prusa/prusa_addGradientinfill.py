@@ -39,11 +39,7 @@ Future Features:
     #TODO
     give warnings if G2/G3 are used and not realative extrusion
     automatically search for infill type
-    
-    
-Known Issues: #TODO
-    M73 P1 R39 changed position
-    same G1 F command inserted twice
+
     
 Experiment with the different input values and djust carefully.
 For me 350 MAX_FLOW was too much 250 worked better.
@@ -69,16 +65,17 @@ Segment = namedtuple('Segment', 'point1 point2')
 # EDIT this section for your creation parameters
 # if the filenames have the same name the original file will be overwritten
 # names only used if run_in_slicer = False
-INPUT_FILE_NAME = "orca_test.gcode"
+INPUT_FILE_NAME = "test.gcode"
 OUTPUT_FILE_NAME = "prusa_script_result.gcode"
 
 run_in_slicer = True
 dialog_in_slicer = True # use different parameters inside of the slicer via dialog
-SLICER_OUTPUT_FILE_NAME = "prusa_script_result101.gcode" # name of the output file
+remove_slicer_info = True # remove first line with slicer information for realistic gcode preview
+
 
 INFILL_TYPE = InfillType.SMALL_SEGMENTS
 
-# the following values will be used as daefault values if run_in_slicer = True
+# the following values will be used as default values if run_in_slicer = True
 MAX_FLOW = 350.0  # maximum extrusion flow
 MIN_FLOW = 50.0  # minimum extrusion flow
 GRADIENT_THICKNESS = 6.0  # thickness of the gradient (max to min) in mm
@@ -279,6 +276,7 @@ def is_begin_infill_segment_line(line: str) -> bool:
     return line.startswith(";TYPE:Internal infill")
 
 edit = 0
+lines = []
 # change to use search patterns instead of finding elements in string
 def process_gcode(
     input_file_name: str,
@@ -298,13 +296,17 @@ def process_gcode(
     lastPosition = Point2D(-10000, -10000)
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
 
-    with open(input_file_name, "r") as gcodeFile, open(output_file_name, "w+") as outputFile:
-        first_line = True # delete first line due to incorrect gcode preview
+    with open(input_file_name, "r") as gcodeFile:
+        if remove_slicer_info:
+                first_line = True # delete first line due to incorrect gcode preview
+        else:
+            first_line = False
+
         for currentLine in gcodeFile:
             if first_line:
                 first_line = False
                 continue
-            
+
             writtenToFile = 0
             
             if is_begin_layer_line(currentLine):
@@ -321,7 +323,7 @@ def process_gcode(
 
             if is_begin_infill_segment_line(currentLine):
                 currentSection = Section.INFILL
-                outputFile.write(currentLine)
+                lines.append(currentLine)
                 continue
 
             if currentSection == Section.INFILL:
@@ -330,7 +332,7 @@ def process_gcode(
                     # outputFile.write("G1 F{ re.search(r"F(\d*\.?\d*)", currentLine).group(1)) }\n"
                     searchSpeed = re.search(r"F(\d*\.?\d*)", currentLine)
                     if searchSpeed:
-                        outputFile.write("G1 F{}\n".format(searchSpeed.group(1)))
+                        lines.append("G1 F{}\n".format(searchSpeed.group(1)))
                     else:
                         raise SyntaxError(f'Gcode file parsing error for line {currentLine}')
                 if prog_extrusion.search(currentLine):
@@ -364,13 +366,13 @@ def process_gcode(
                                 else:
                                     segmentExtrusion = extrusionLengthPerSegment * min_flow / 100
 
-                                outputFile.write(get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
+                                lines.append(get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
 
                                 lastPosition = segmentEnd
                             # MissingSegment
                             segmentLengthRatio = get_points_distance(lastPosition, currentPosition) / segmentLength
 
-                            outputFile.write(
+                            lines.append(
                                 get_extrusion_command(
                                     currentPosition.x,
                                     currentPosition.y,
@@ -385,7 +387,7 @@ def process_gcode(
                                 else:
                                     outPutLine = outPutLine + element + " "
                             outPutLine = outPutLine + "\n"
-                            outputFile.write(outPutLine)
+                            lines.append(outPutLine)
                         writtenToFile = 1
 
                     # gyroid or honeycomb
@@ -405,7 +407,7 @@ def process_gcode(
                                 else:
                                     outPutLine = outPutLine + element + " "
                             outPutLine = outPutLine + "\n"
-                            outputFile.write(outPutLine)
+                            lines.append(outPutLine)
                             writtenToFile = 1
                             
                 # infill type resetted broke the script
@@ -419,9 +421,13 @@ def process_gcode(
 
             # write uneditedLine
             if writtenToFile == 0:
-                outputFile.write(currentLine)
+                lines.append(currentLine)
             else:
                 edit += 1
+        
+        with open(output_file_name, "w") as outputFile:
+            for line in lines:
+                outputFile.write("%s"  % line)
         
         # check if the script did anything
         if edit== 0:
@@ -477,7 +483,7 @@ try:
             
         # changed out path
         process_gcode(
-            file_path, SLICER_OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
+            file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
         )
         
     else:
@@ -490,6 +496,6 @@ except Exception:
     if run_in_slicer:
         print('Press enter to close window')
         print('If you need help open an issue on my Github at:https://github.com/WatchingWatches')
-        print('Please share all of the settings yo were using and the error message')
+        print('Please share all of the settings you were using and the error message')
         input()
     
