@@ -1,6 +1,4 @@
 # Gradientinfill for Orca slicer:
-The script changes the gcode succesfully. However i couldn't visualize the changes made inside of any gcode previewer. The only way to tell a difference is to compare both files inside of the notepad++ with the compare plugin.
-
 If you are running the script from orcaslicer there will be just one output file. I recommend testing the script first inside of an IDE and compare the original and modifyed file.
 
 The following part was originally written as a [guide for prusa slicer](https://github.com/WatchingWatches/GradientInfill/tree/master/Prusa), but the slicer settings are the same, but might be found at a different location.
@@ -39,9 +37,9 @@ The script gets called after the slicing process.
 This means, that the preview inside of the slicer doesn't show the changes of the script.
 
 ### Investigate the modifyed gcode (recommended):
-The following steps are recommended and should be perfomed everytime, until you trust the script. There might be errors specific to your gcode, which i haven't thought of. Those could potentially damage your printer.
+The following steps are recommended and should be performed everytime, until you trust the script. There might be errors specific to your gcode, which i haven't thought of. Those could potentially damage your printer.
 
-Open the file inside of a gcode viewer, to take a look at the modifyed gcode. Select the line width color scheme to see the difference. 
+Open the file inside of a gcode viewer (drag the gcode file into orca slicer), to take a look at the modifyed gcode. Select the line width color scheme to see the difference. 
 Open the two files inside of notepad++ and compare both files with a plugin called "compare". The program will mark all of the changes in between both files. This is the safest check, since the gcode previewer can give a wrong impression.
 
 ## General advice:
