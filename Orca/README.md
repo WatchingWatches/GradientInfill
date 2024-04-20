@@ -46,5 +46,16 @@ Open the two files inside of notepad++ and compare both files with a plugin call
 Experiment with the different parameters. For me a ``MAX_FLOW = 350`` was set too high and 250 worked better.
 
 Print small test pieces to test your settings. The test pieces don't need to be tall, but the infill section needs to be large enough, so you can actually see the difference in line width.
+You may need to lower the infill speed, since the flow increases with the use of the script.
+Check in the preview, that it's not exeeding the maximum flow of the hotend. The line width of the infiil shouldn't be much higher than the nozzle diameter in the slicer setting.
+
 If you modify a big file the computing time can be several minutes long.
 I tryed adding a progress bar, but it nearly doubled the execution time, so i removed it.
+
+## Prospect for the future:
+I will try to optimise the calculation time of the script.
+With your help i will debug the script for errors, which might occur.
+
+You may also be interested in my own postprocessing scripts, which can be found [here](https://github.com/WatchingWatches/Post_processing_gcode).
+
+Thank you for you feedback in advance. Also feel free to adapt the script to other slicers too.
