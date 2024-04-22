@@ -41,4 +41,4 @@ Sample part with a Gradient distance set to 8 mm :
 ![82570108_1223017127904648_3642722292435255296_o](https://user-images.githubusercontent.com/11015345/72863337-8e827580-3cd0-11ea-9681-e1de7e2071c2.jpg)
 
 # GradientInfill by WatchingWatches
-Adapted version of the script addGradientInfill.py ,which works with Prusa and Orca slicer. Both scripts have a own folder with detailed instructions inside of the README file.
+Adapted version of the script addGradientInfill.py, which works with Prusa and Orca slicer. Both scripts have a own folder with detailed instructions inside of the README file.
