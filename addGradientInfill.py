@@ -26,8 +26,8 @@ Segment = namedtuple('Segment', 'point1 point2')
 
 # EDIT this section for your creation parameters
 
-INPUT_FILE_NAME = "cura_test_gradientinfill.gcode"
-OUTPUT_FILE_NAME = "cura_script_test.gcode"
+INPUT_FILE_NAME = "cloverleaf_wHole_gyroid.gcode"
+OUTPUT_FILE_NAME = "BOWDEN_cloverleaf_wHole_gyroid.gcode"
 
 INFILL_TYPE = InfillType.SMALL_SEGMENTS
 
@@ -236,7 +236,6 @@ def process_gcode(
     with open(input_file_name, "r") as gcodeFile, open(output_file_name, "w+") as outputFile:
         for currentLine in gcodeFile:
             writtenToFile = 0
-            print(currentLine+'helo!!!')
             if is_begin_layer_line(currentLine):
                 perimeterSegments = []
 
