@@ -28,6 +28,7 @@ Without these slicer settings the script will not work.
 
 ### Wipe while retracting must be disabled:
 printer settings -> extruder -> retraction
+
 Also ensure, that the filament override is disabled.
 
 ### Automatically call script when saving the file:

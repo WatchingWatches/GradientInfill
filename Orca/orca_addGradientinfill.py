@@ -100,7 +100,12 @@ def dist(segment: Segment, point: Point2D) -> float:
     px = segment.point2.x - segment.point1.x
     py = segment.point2.y - segment.point1.y
     norm = px * px + py * py
-    u = ((point.x - segment.point1.x) * px + (point.y - segment.point1.y) * py) / float(norm)
+    try:
+        u = ((point.x - segment.point1.x) * px + (point.y - segment.point1.y) * py) / float(norm)
+    except ZeroDivisionError:
+        # error when norm = 0 machine accuracy
+        return 0
+    
     if u > 1:
         u = 1
     elif u < 0:
@@ -267,7 +272,7 @@ def is_begin_infill_segment_line(line: str) -> bool:
     return line.startswith(";TYPE:Sparse infill")
 
 
-edit = 0
+
 lines = []
 # change to use search patterns instead of finding elements in string
 def process_gcode(
@@ -280,10 +285,12 @@ def process_gcode(
     gradient_discretization: float,
 ) -> None:
     """Parse input Gcode file and modify infill portions with an extrusion width gradient."""
-    global edit
+    #global edit
     prog_move = re.compile(r'^G[0-1].*X.*Y')
     prog_extrusion = re.compile(r'^G1.*X.*Y.*E')
+    prog_type = re.compile(r'^;TYPE:')
     
+    edit = 0
     currentSection = Section.NOTHING
     lastPosition = Point2D(-10000, -10000)
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
@@ -294,20 +301,27 @@ def process_gcode(
             
             if is_begin_layer_line(currentLine):
                 perimeterSegments = []
+                
+            # search if it indicates a type
+            if prog_type.search(currentLine):
+                if is_begin_inner_wall_line(currentLine):
+                    currentSection = Section.INNER_WALL
+                    
+                # kann weggelassen werden
+                elif is_end_inner_wall_line(currentLine):
+                    currentSection = Section.NOTHING
 
-            if is_begin_inner_wall_line(currentLine):
-                currentSection = Section.INNER_WALL
-
+                elif is_begin_infill_segment_line(currentLine):
+                    currentSection = Section.INFILL
+                    lines.append(currentLine)
+                    continue
+                # irrelevent type, this was in the cura version searching for ; at the end
+                else:
+                    currentSection = Section.NOTHING
+                    
+                
             if currentSection == Section.INNER_WALL and is_extrusion_line(currentLine):
                 perimeterSegments.append(Segment(getXY(currentLine), lastPosition))
-
-            if is_end_inner_wall_line(currentLine):
-                currentSection = Section.NOTHING
-
-            if is_begin_infill_segment_line(currentLine):
-                currentSection = Section.INFILL
-                lines.append(currentLine)
-                continue
 
             if currentSection == Section.INFILL:
                 if "F" in currentLine and "G1" in currentLine:
@@ -483,6 +497,6 @@ except Exception:
     if run_in_slicer:
         print('Press enter to close window')
         print('If you need help open an issue on my Github at:https://github.com/WatchingWatches')
-        print('Please share all of the settings yo were using and the error message')
+        print('Please share all of the settings you were using and the error message')
         input()
     
