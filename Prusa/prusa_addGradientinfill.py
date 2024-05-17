@@ -43,7 +43,7 @@ Future Features:
     
 Experiment with the different input values and djust carefully.
 For me 350 MAX_FLOW was too much 250 worked better.
-Nowdays the linewidth is ften higher then the nozzle size, which wasn't the standart 5 years ago.
+Nowdays the linewidth is often higher then the nozzle size, which wasn't the standart 5 years ago.
 
 RECOMMENDATION:
 After running the script carefully look at the gcode preview and compare with the original gcode.
@@ -505,7 +505,7 @@ try:
         
     else:
         process_gcode(
-            INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
+            INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, BOTTOM_LAYERS
         )
         
 except Exception:
