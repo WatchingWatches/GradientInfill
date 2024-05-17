@@ -69,15 +69,15 @@ INPUT_FILE_NAME = "test.gcode"
 OUTPUT_FILE_NAME = "prusa_script_result.gcode"
 
 run_in_slicer = True
-dialog_in_slicer = True # use different parameters inside of the slicer via dialog
+dialog_in_slicer = False # use different parameters inside of the slicer via dialog
 remove_slicer_info = True # remove first line with slicer information for realistic gcode preview
 
-
+BOTTOM_LAYERS = 4 #182 for the other alternative
 INFILL_TYPE = InfillType.SMALL_SEGMENTS
 
 # the following values will be used as default values if run_in_slicer = True
-MAX_FLOW = 350.0  # maximum extrusion flow
-MIN_FLOW = 50.0  # minimum extrusion flow
+MAX_FLOW = 250.0  # maximum extrusion flow
+MIN_FLOW = 60.0  # minimum extrusion flow
 GRADIENT_THICKNESS = 6.0  # thickness of the gradient (max to min) in mm
 GRADIENT_DISCRETIZATION = 4.0  # only applicable for linear infills; number of segments within the
 # gradient(segmentLength=gradientThickness / gradientDiscretization); use sensible values to not overload the printer
@@ -286,6 +286,7 @@ def process_gcode(
     min_flow: float,
     gradient_thickness: float,
     gradient_discretization: float,
+    bottom_layers: int = 0,
 ) -> None:
     """Parse input Gcode file and modify infill portions with an extrusion width gradient."""
     #global edit, currentLine, currentSection
@@ -294,6 +295,7 @@ def process_gcode(
     prog_type = re.compile(r'^;TYPE:')
     
     edit = 0
+    layer_count = 1
     currentSection = Section.NOTHING
     lastPosition = Point2D(-10000, -10000)
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
@@ -313,120 +315,126 @@ def process_gcode(
             
             if is_begin_layer_line(currentLine):
                 perimeterSegments = []
-                
-            # search if it indicates a type
-            if prog_type.search(currentLine):
-                if is_begin_inner_wall_line(currentLine):
-                    currentSection = Section.INNER_WALL
-                    
-                elif is_end_inner_wall_line(currentLine):
-                    currentSection = Section.NOTHING
+                layer_count += 1
 
-                elif is_begin_infill_segment_line(currentLine):
-                    currentSection = Section.INFILL
-                    lines.append(currentLine)
-                    continue
-                # irrelevent type, this was in the cura version searching for ; at the end
-                else:
-                    currentSection = Section.NOTHING
-                    
-                
-            if currentSection == Section.INNER_WALL and is_extrusion_line(currentLine):
-                perimeterSegments.append(Segment(getXY(currentLine), lastPosition))
+            if layer_count  > bottom_layers:    
+                # search if it indicates a type
+                if prog_type.search(currentLine):
+                    if is_begin_inner_wall_line(currentLine):
+                        currentSection = Section.INNER_WALL
+                        
+                    elif is_end_inner_wall_line(currentLine):
+                        currentSection = Section.INNER_WALL
+                        
+                        continue
 
-            
-            if currentSection == Section.INFILL:
-                if "F" in currentLine and "G1" in currentLine:
-                    # python3.6+ f-string variant:
-                    # outputFile.write("G1 F{ re.search(r"F(\d*\.?\d*)", currentLine).group(1)) }\n"
-                    searchSpeed = re.search(r"F(\d*\.?\d*)", currentLine)
-                    if searchSpeed:
-                        lines.append("G1 F{}\n".format(searchSpeed.group(1)))
+                    elif is_begin_infill_segment_line(currentLine):
+                        currentSection = Section.INFILL
+                        lines.append(currentLine)
+                        continue
+                    # irrelevent type, this was in the cura version searching for ; at the end
                     else:
-                        raise SyntaxError(f'Gcode file parsing error for line {currentLine}')
-                if prog_extrusion.search(currentLine):
-                    currentPosition = getXY(currentLine)
-                    splitLine = currentLine.split(" ")
+                        currentSection = Section.NOTHING
 
-                    if infill_type == InfillType.LINEAR:
-                        # find extrusion length
-                        for element in splitLine:
-                            if "E" in element:
-                                extrusionLength = float(element[1:])
-                        segmentLength = get_points_distance(lastPosition, currentPosition)
-                        segmentSteps = segmentLength / gradientDiscretizationLength
-                        extrusionLengthPerSegment = extrusionLength / segmentSteps
-                        segmentDirection = Point2D(
-                            (currentPosition.x - lastPosition.x) / segmentLength * gradientDiscretizationLength,
-                            (currentPosition.y - lastPosition.y) / segmentLength * gradientDiscretizationLength,
-                        )
-                        if segmentSteps >= 2:
-                            for step in range(int(segmentSteps)):
-                                segmentEnd = Point2D(
-                                    lastPosition.x + segmentDirection.x, lastPosition.y + segmentDirection.y
-                                )
-                                shortestDistance = min_distance_from_segment(
-                                    Segment(lastPosition, segmentEnd), perimeterSegments
-                                )
-                                if shortestDistance < gradient_thickness:
-                                    segmentExtrusion = extrusionLengthPerSegment * mapRange(
-                                        (0, gradient_thickness), (max_flow / 100, min_flow / 100), shortestDistance
-                                    )
-                                else:
-                                    segmentExtrusion = extrusionLengthPerSegment * min_flow / 100
-
-                                lines.append(get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
-
-                                lastPosition = segmentEnd
-                            # MissingSegment
-                            segmentLengthRatio = get_points_distance(lastPosition, currentPosition) / segmentLength
-
-                            lines.append(
-                                get_extrusion_command(
-                                    currentPosition.x,
-                                    currentPosition.y,
-                                    segmentLengthRatio * extrusionLength * max_flow / 100,
-                                )
-                            )
-                        else:
-                            outPutLine = ""
-                            for element in splitLine:
-                                if "E" in element:
-                                    outPutLine = outPutLine + "E" + str(round(extrusionLength * max_flow / 100, 5))
-                                else:
-                                    outPutLine = outPutLine + element + " "
-                            outPutLine = outPutLine + "\n"
-                            lines.append(outPutLine)
-                        writtenToFile = 1
-
-                    # gyroid or honeycomb
-                    if infill_type == InfillType.SMALL_SEGMENTS:
-                        shortestDistance = min_distance_from_segment(
-                            Segment(lastPosition, currentPosition), perimeterSegments
-                        )
-
-                        outPutLine = ""
-                        if shortestDistance < gradient_thickness:
-                            for element in splitLine:
-                                if "E" in element:
-                                    newE = float(element[1:]) * mapRange(
-                                        (0, gradient_thickness), (max_flow / 100, min_flow / 100), shortestDistance
-                                    )
-                                    outPutLine = outPutLine + "E" + str(round(newE, 5))
-                                else:
-                                    outPutLine = outPutLine + element + " "
-                            outPutLine = outPutLine + "\n"
-                            lines.append(outPutLine)
-                            writtenToFile = 1
+                if currentSection == Section.INNER_WALL:
+                    writtenToFile = 1 # delete outer perimeter
                             
-                # infill type resetted broke the script
-                # this was probably used as a "safety" feature
-                #if ";" in currentLine:
-                #    currentSection = Section.NOTHING
+                if currentSection == Section.INNER_WALL and is_extrusion_line(currentLine):
+                    perimeterSegments.append(Segment(getXY(currentLine), lastPosition))
 
-            # line with move
-            if prog_move.search(currentLine):
-                lastPosition = getXY(currentLine)
+                
+                if currentSection == Section.INFILL:
+                    if "F" in currentLine and "G1" in currentLine:
+                        # python3.6+ f-string variant:
+                        # outputFile.write("G1 F{ re.search(r"F(\d*\.?\d*)", currentLine).group(1)) }\n"
+                        searchSpeed = re.search(r"F(\d*\.?\d*)", currentLine)
+                        if searchSpeed:
+                            lines.append("G1 F{}\n".format(searchSpeed.group(1)))
+                        else:
+                            raise SyntaxError(f'Gcode file parsing error for line {currentLine}')
+                    if prog_extrusion.search(currentLine):
+                        currentPosition = getXY(currentLine)
+                        splitLine = currentLine.split(" ")
+
+                        if infill_type == InfillType.LINEAR:
+                            # find extrusion length
+                            for element in splitLine:
+                                if "E" in element:
+                                    extrusionLength = float(element[1:])
+                            segmentLength = get_points_distance(lastPosition, currentPosition)
+                            segmentSteps = segmentLength / gradientDiscretizationLength
+                            extrusionLengthPerSegment = extrusionLength / segmentSteps
+                            segmentDirection = Point2D(
+                                (currentPosition.x - lastPosition.x) / segmentLength * gradientDiscretizationLength,
+                                (currentPosition.y - lastPosition.y) / segmentLength * gradientDiscretizationLength,
+                            )
+                            if segmentSteps >= 2:
+                                for step in range(int(segmentSteps)):
+                                    segmentEnd = Point2D(
+                                        lastPosition.x + segmentDirection.x, lastPosition.y + segmentDirection.y
+                                    )
+                                    shortestDistance = min_distance_from_segment(
+                                        Segment(lastPosition, segmentEnd), perimeterSegments
+                                    )
+                                    if shortestDistance < gradient_thickness:
+                                        segmentExtrusion = extrusionLengthPerSegment * mapRange(
+                                            (0, gradient_thickness), (max_flow / 100, min_flow / 100), shortestDistance
+                                        )
+                                    else:
+                                        segmentExtrusion = extrusionLengthPerSegment * min_flow / 100
+
+                                    lines.append(get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
+
+                                    lastPosition = segmentEnd
+                                # MissingSegment
+                                segmentLengthRatio = get_points_distance(lastPosition, currentPosition) / segmentLength
+
+                                lines.append(
+                                    get_extrusion_command(
+                                        currentPosition.x,
+                                        currentPosition.y,
+                                        segmentLengthRatio * extrusionLength * max_flow / 100,
+                                    )
+                                )
+                            else:
+                                outPutLine = ""
+                                for element in splitLine:
+                                    if "E" in element:
+                                        outPutLine = outPutLine + "E" + str(round(extrusionLength * max_flow / 100, 5))
+                                    else:
+                                        outPutLine = outPutLine + element + " "
+                                outPutLine = outPutLine + "\n"
+                                lines.append(outPutLine)
+                            writtenToFile = 1
+
+                        # gyroid or honeycomb
+                        if infill_type == InfillType.SMALL_SEGMENTS:
+                            shortestDistance = min_distance_from_segment(
+                                Segment(lastPosition, currentPosition), perimeterSegments
+                            )
+
+                            outPutLine = ""
+                            if shortestDistance < gradient_thickness:
+                                for element in splitLine:
+                                    if "E" in element:
+                                        newE = float(element[1:]) * mapRange(
+                                            (0, gradient_thickness), (max_flow / 100, min_flow / 100), shortestDistance
+                                        )
+                                        outPutLine = outPutLine + "E" + str(round(newE, 5))
+                                    else:
+                                        outPutLine = outPutLine + element + " "
+                                outPutLine = outPutLine + "\n"
+                                lines.append(outPutLine)
+                                writtenToFile = 1
+                                
+                    # infill type resetted broke the script
+                    # this was probably used as a "safety" feature
+                    #if ";" in currentLine:
+                    #    currentSection = Section.NOTHING
+
+                # line with move
+                if prog_move.search(currentLine):
+                    lastPosition = getXY(currentLine)
 
             # write uneditedLine
             if writtenToFile == 0:
@@ -492,7 +500,7 @@ try:
             
         # changed out path
         process_gcode(
-            file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
+            file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, BOTTOM_LAYERS
         )
         
     else:
