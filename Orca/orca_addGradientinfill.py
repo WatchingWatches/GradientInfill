@@ -15,6 +15,7 @@ from enum import Enum
 from typing import List, Tuple
 import traceback
 import time
+from math import pi
 
 
 __version__ = '1.0'
@@ -38,13 +39,10 @@ Features:
     gives error message inside of the terminal
     
 Future Features:
-    #TODO
+    # TODO
     give warnings if G2/G3 are used and not realative extrusion
     automatically search for infill type
     
-    
-Known Issues: #TODO
-    same G1 F command inserted twice
 """
 
 class InfillType(Enum):
@@ -66,6 +64,11 @@ OUTPUT_FILE_NAME = "orca_script_result.gcode"
 # Warning there is just one file as output, which means you can't compare it to the original
 run_in_slicer = True
 dialog_in_slicer = True # use different parameters inside of the slicer via dialog else the following values are used
+
+HOTEND_MAX_FLOW = 12.0  # maximum flow of the hotend in mm^3/s
+D_F = 1.75  # diameter of the filament in mm
+# this setting is only relevant for SMALL_SEGMENTS infill when disabled the infill outside of the GRADIENT_THICKNESS isn't changed
+THIN_INNER_CORE = True 
 
 INFILL_TYPE = InfillType.SMALL_SEGMENTS
 
@@ -271,6 +274,21 @@ def is_begin_infill_segment_line(line: str) -> bool:
     """
     return line.startswith(";TYPE:Sparse infill")
 
+def control_flow(hotend_max_flow: float, extrusionLength:float, distance:float, d_f:float)-> str:
+    """Calculate new feedrate to stay at the limit of the hotend maximum flow.
+
+    Args:
+        hotend_max_flow (float): maximum volumetric flow of the hotend in mm^3/s
+        extrusionLength (float): length of the extruded filament (E value) in mm
+        distance (float): distance of the extrusion in mm
+        d_f (float): diameter of the filament in mm
+        current_flow (float): current flow value in mm^3/s
+
+    Returns:
+        str: Gcode line with new feedrate
+    """
+    F = round((hotend_max_flow*distance*60*4)/(extrusionLength*(d_f**2)*pi), 3)
+    return "G1 F{}\n".format(F) 
 
 
 lines = []
@@ -283,6 +301,9 @@ def process_gcode(
     min_flow: float,
     gradient_thickness: float,
     gradient_discretization: float,
+    hotend_max_flow: float,
+    d_f: float,
+    thin_inner_core: bool,
 ) -> None:
     """Parse input Gcode file and modify infill portions with an extrusion width gradient."""
     #global edit
@@ -307,7 +328,7 @@ def process_gcode(
                 if is_begin_inner_wall_line(currentLine):
                     currentSection = Section.INNER_WALL
                     
-                # kann weggelassen werden
+                # kann weggelassen werden TODO richtig?
                 elif is_end_inner_wall_line(currentLine):
                     currentSection = Section.NOTHING
 
@@ -329,7 +350,11 @@ def process_gcode(
                     # outputFile.write("G1 F{ re.search(r"F(\d*\.?\d*)", currentLine).group(1)) }\n"
                     searchSpeed = re.search(r"F(\d*\.?\d*)", currentLine)
                     if searchSpeed:
-                        lines.append("G1 F{}\n".format(searchSpeed.group(1)))
+                        infill_speed = searchSpeed.group(1)
+                        infill_begin = True
+                        # previous double F command fixed
+                        if "E" in currentLine:
+                            lines.append("G1 F{}\n".format(infill_speed))
                     else:
                         raise SyntaxError(f'Gcode file parsing error for line {currentLine}')
                 if prog_extrusion.search(currentLine):
@@ -348,6 +373,11 @@ def process_gcode(
                             (currentPosition.x - lastPosition.x) / segmentLength * gradientDiscretizationLength,
                             (currentPosition.y - lastPosition.y) / segmentLength * gradientDiscretizationLength,
                         )
+                        # calculate original infill flow once per layer
+                        if infill_begin:
+                            infill_flow = (float(infill_speed)*(d_f**2)*pi*extrusionLength) / (4*segmentLength*60)
+                        else:
+                            infill_begin = False
                         if segmentSteps >= 2:
                             for step in range(int(segmentSteps)):
                                 segmentEnd = Point2D(
@@ -357,33 +387,63 @@ def process_gcode(
                                     Segment(lastPosition, segmentEnd), perimeterSegments
                                 )
                                 if shortestDistance < gradient_thickness:
-                                    segmentExtrusion = extrusionLengthPerSegment * mapRange(
+                                    flow_factor = mapRange(
                                         (0, gradient_thickness), (max_flow / 100, min_flow / 100), shortestDistance
                                     )
+                                    segmentExtrusion = extrusionLengthPerSegment * flow_factor
+                                    
                                 else:
                                     segmentExtrusion = extrusionLengthPerSegment * min_flow / 100
-
-                                lines.append(get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
+                                    flow_factor = min_flow / 100
+                                    
+                                # check for flow limit
+                                current_flow = infill_flow * flow_factor
+                                if current_flow > hotend_max_flow:
+                                    new_feedrate = control_flow(hotend_max_flow, extrusionLengthPerSegment*flow_factor, gradientDiscretizationLength, d_f, current_flow)
+                                    lines.append(new_feedrate + get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
+                                    is_old_speed = False
+                                elif is_old_speed:
+                                    lines.append(get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
+                                else:
+                                    is_old_speed = True
+                                    lines.append("G1 F{}\n".format(infill_speed) + get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
 
                                 lastPosition = segmentEnd
                             # MissingSegment
                             segmentLengthRatio = get_points_distance(lastPosition, currentPosition) / segmentLength
-
-                            lines.append(
-                                get_extrusion_command(
-                                    currentPosition.x,
-                                    currentPosition.y,
-                                    segmentLengthRatio * extrusionLength * max_flow / 100,
+                            current_flow = infill_flow * max_flow / 100
+                            if current_flow > hotend_max_flow:
+                                new_feedrate = control_flow(hotend_max_flow, extrusionLength * max_flow / 100, segmentLength, d_f)
+                                
+                                lines.append(new_feedrate +
+                                                get_extrusion_command(
+                                                    currentPosition.x,
+                                                    currentPosition.y,
+                                                    segmentLengthRatio * extrusionLength * max_flow / 100,
+                                                )
+                                            )
+                            else:
+                                lines.append(
+                                    get_extrusion_command(
+                                        currentPosition.x,
+                                        currentPosition.y,
+                                        segmentLengthRatio * extrusionLength * max_flow / 100,
+                                    )
                                 )
-                            )
-                        else:
+                        else: # not splitted line
                             outPutLine = ""
                             for element in splitLine:
                                 if "E" in element:
                                     outPutLine = outPutLine + "E" + str(round(extrusionLength * max_flow / 100, 5))
+                                    current_flow = infill_flow * max_flow / 100
                                 else:
                                     outPutLine = outPutLine + element + " "
-                            outPutLine = outPutLine + "\n"
+
+                            if current_flow > hotend_max_flow:
+                                new_feedrate = control_flow(hotend_max_flow, extrusionLength * max_flow / 100, segmentSteps, d_f)
+                                outPutLine = new_feedrate + outPutLine + "\n"
+                            else:
+                                outPutLine = outPutLine + "\n"
                             lines.append(outPutLine)
                         writtenToFile = 1
 
@@ -397,18 +457,56 @@ def process_gcode(
                         if shortestDistance < gradient_thickness:
                             for element in splitLine:
                                 if "E" in element:
-                                    newE = float(element[1:]) * mapRange(
+                                    flow_factor = mapRange(
                                         (0, gradient_thickness), (max_flow / 100, min_flow / 100), shortestDistance
                                     )
+                                    newE = float(element[1:]) * flow_factor
+                                    # calculate original infill flow once per layer
+                                    if infill_begin:
+                                        segmentLength = get_points_distance(lastPosition, currentPosition)
+                                        infill_flow = (float(infill_speed)*(d_f**2)*pi*float(element[1:])) / (4*segmentLength*60)
+
+                                        if infill_flow > hotend_max_flow + 0.5:
+                                            print('Your infill flow is higher, than the hotend limit in the script!')
+                                            print('Please adjust either your slicer or script settings')
+                                            print('Slicer Infill Flow:', infill_flow, 'Script Hotend Max Flow:', hotend_max_flow, '[mm^3/s]')
+                                            input()
+                                    else:
+                                        infill_begin = False
                                     outPutLine = outPutLine + "E" + str(round(newE, 5))
                                 else:
                                     outPutLine = outPutLine + element + " "
-                            outPutLine = outPutLine + "\n"
+                            current_flow = infill_flow * flow_factor
+                            if current_flow > hotend_max_flow:
+                                segmentLength = get_points_distance(lastPosition, currentPosition)
+                                new_feedrate = control_flow(hotend_max_flow, newE*flow_factor, segmentLength, d_f)
+                                is_old_speed = False
+                                
+                                outPutLine = new_feedrate + outPutLine + "\n"
+                            
+                            elif is_old_speed:
+                                outPutLine = outPutLine + "\n"
+                            else:
+                                is_old_speed = True
+                                outPutLine = "G1 F{}\n".format(infill_speed) + outPutLine + "\n"
+                                
                             lines.append(outPutLine)
                             writtenToFile = 1
+
+                        elif thin_inner_core:
+                            # no need to check for maximum flow since it will be lowered
+                            for element in splitLine:
+                                if "E" in element:
+                                    newE = float(element[1:]) * min_flow / 100
+                                else:
+                                    outPutLine = outPutLine + element + " "
+                            outPutLine = outPutLine + "E" + str(round(newE, 5)) + "\n"
+                            lines.append(outPutLine)
+                            writtenToFile = 1
+
                             
                 # infill type resetted broke the script
-                # this was probably used as a "safety" feature
+                # in the adaption it's implemented by searching by irrelevant type
                 #if ";" in currentLine:
                 #    currentSection = Section.NOTHING
 
@@ -442,8 +540,6 @@ def process_gcode(
 try:
     if run_in_slicer:
         file_path = sys.argv[1] # the path of the gcode given by the slicer
-        
-        
         if dialog_in_slicer:
             # repeat process up to 3 times if inserted values are incorrect
             for _ in range(3):
@@ -462,41 +558,46 @@ try:
                 print('Input GRADIENT_THICKNESS and press enter (default 6.0)')
                 GRADIENT_THICKNESS = float(input())
                 
-                print('Input GRADIENT_DISCRETIZATION and press enter (default 4.0)')
-                GRADIENT_DISCRETIZATION = float(input())
-                
                 print('Input INFILL_TYPE choose [0] for SMALL_SEGMENTS and [1] for LINEAR:')
                 choose_infill_type = int(input())
                 if choose_infill_type == 0:
                     INFILL_TYPE = InfillType.SMALL_SEGMENTS
+                    print('Enable THIN_INNER_CORE ? [y] to enable')
+                    if str(input()) == 'y':
+                        THIN_INNER_CORE = True
+                    else:
+                        THIN_INNER_CORE = False
                 else:
                     INFILL_TYPE = InfillType.LINEAR
+                    print('Input GRADIENT_DISCRETIZATION and press enter (default 4.0)')
+                    GRADIENT_DISCRETIZATION = float(input())
                     
                 print('Are all values correct? [y] to proceed')
                 correct = str(input())
                 
                 if correct == 'y':
+                    print('Script is running please wait...')
                     break
         start = time.time()   
         # changed out path
         process_gcode(
-            file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
+            file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
         )
         
     else:
         start = time.time()
         process_gcode(
-            INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
+            INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
         )
         
-    print('Time to excecute:',time.time()- start)
-        
+    print('Time to excecute:',time.time()- start) 
+    
 except Exception:
     traceback.print_exc()
     
+    print('Press enter to close window')
+    print('If you need help open an issue on my Github at:https://github.com/WatchingWatches/GradientInfill')
+    print('Please share all of the settings you were using and the error message')
+
     if run_in_slicer:
-        print('Press enter to close window')
-        print('If you need help open an issue on my Github at:https://github.com/WatchingWatches')
-        print('Please share all of the settings you were using and the error message')
         input()
-    
