@@ -300,13 +300,14 @@ def process_gcode(
     lastPosition = Point2D(-10000, -10000)
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
 
-    with open(input_file_name, "r") as gcodeFile:
+    with open(input_file_name, "r") as gcodefile:
+        gcodeFile = gcodefile.readlines()
         if remove_slicer_info:
                 first_line = True # delete first line due to incorrect gcode preview
         else:
             first_line = False
 
-        for currentLine in gcodeFile:
+        for line_count, currentLine in enumerate(gcodeFile):
             if first_line:
                 first_line = False
                 continue
@@ -322,13 +323,29 @@ def process_gcode(
                 if prog_type.search(currentLine):
                     if is_begin_inner_wall_line(currentLine):
                         currentSection = Section.INNER_WALL
+                        previous_wall_Section = True
                         
                     elif is_end_inner_wall_line(currentLine):
                         currentSection = Section.INNER_WALL
+                        previous_wall_Section = True
                         
                         continue
 
                     elif is_begin_infill_segment_line(currentLine):
+                        # get last position of wall extrusion
+                        if previous_wall_Section: 
+                            for lastG in range(line_count-1, 0, -1):
+                                if gcodeFile[lastG].startswith("G1") and "X" in gcodeFile[lastG] and "Y" in gcodeFile[lastG]:
+                                    G_line = gcodeFile[lastG]
+                                    add_position = ""
+                                    for i in range(len(G_line)):
+                                        if G_line[i] == 'E':
+                                            break
+                                        add_position += G_line[i]
+                                    lines.append(add_position + '\n')
+                                    previous_wall_Section = False
+                                    break
+
                         currentSection = Section.INFILL
                         lines.append(currentLine)
                         continue
