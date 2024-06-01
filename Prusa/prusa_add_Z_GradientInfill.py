@@ -4,14 +4,14 @@ import traceback
 
 MAX_FLOW = 220
 MIN_FLOW = 60
-NUMBER_OF_LAYERS = 185
+NUMBER_OF_LAYERS = 386
 BOTTTOM_LAYERS = 4
 TOP_LAYERS = 4
 EQUALIZE_FLOW = True
 RUN_IN_SLICER = False
 DENSE_TO_LIGHT = True # True: high line width at the bottom at the top low
 
-input_file_name = r"C:\Users\bjans\Downloads\Shape-Box_44m_0.20mm_240C_PETG_ENDER5PRO.gcode"
+input_file_name = r"C:\Users\bjans\Downloads\Headrest Foam_14h13m_0.20mm_200C_PLA_ENDER5PRO.gcode"
 output_file_name = r"C:\Users\bjans\Downloads\Z_gradient.gcode"
 
 prog_type = re.compile(r'^;TYPE:')

@@ -69,10 +69,10 @@ INPUT_FILE_NAME = "test.gcode"
 OUTPUT_FILE_NAME = "prusa_script_result.gcode"
 
 run_in_slicer = True
-dialog_in_slicer = False # use different parameters inside of the slicer via dialog
+dialog_in_slicer = True # use different parameters inside of the slicer via dialog
 remove_slicer_info = True # remove first line with slicer information for realistic gcode preview
 
-BOTTOM_LAYERS = 4 #182 for the other alternative
+BOTTOM_LAYERS = 2 
 INFILL_TYPE = InfillType.SMALL_SEGMENTS
 
 # the following values will be used as default values if run_in_slicer = True
@@ -300,6 +300,8 @@ def process_gcode(
     lastPosition = Point2D(-10000, -10000)
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
 
+    print("Warning this is a experimental script, which takes away the perimeter. The gcode might not be printable!")
+    
     with open(input_file_name, "r") as gcodefile:
         gcodeFile = gcodefile.readlines()
         if remove_slicer_info:
@@ -318,14 +320,14 @@ def process_gcode(
                 perimeterSegments = []
                 layer_count += 1
 
-            if layer_count  > bottom_layers:    
+            if layer_count  > bottom_layers+1:    
                 # search if it indicates a type
                 if prog_type.search(currentLine):
                     if is_begin_inner_wall_line(currentLine):
                         currentSection = Section.INNER_WALL
                         previous_wall_Section = True
                         
-                    elif is_end_inner_wall_line(currentLine):
+                    elif is_end_inner_wall_line(currentLine) or currentLine.startswith(";TYPE:Overhang perimeter"):
                         currentSection = Section.INNER_WALL
                         previous_wall_Section = True
                         
