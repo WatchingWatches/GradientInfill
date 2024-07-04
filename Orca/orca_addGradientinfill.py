@@ -65,7 +65,7 @@ OUTPUT_FILE_NAME = "orca_script_result.gcode"
 run_in_slicer = True
 dialog_in_slicer = True # use different parameters inside of the slicer via dialog else the following values are used
 
-HOTEND_MAX_FLOW = 12.0  # maximum flow of the hotend in mm^3/s
+HOTEND_MAX_FLOW = 25.0  # maximum flow of the hotend in mm^3/s
 D_F = 1.75  # diameter of the filament in mm
 # this setting is only relevant for SMALL_SEGMENTS infill when disabled the infill outside of the GRADIENT_THICKNESS isn't changed
 THIN_INNER_CORE = True 
@@ -306,7 +306,7 @@ def process_gcode(
     thin_inner_core: bool,
 ) -> None:
     """Parse input Gcode file and modify infill portions with an extrusion width gradient."""
-    #global edit
+    global currentLine
     prog_move = re.compile(r'^G[0-1].*X.*Y')
     prog_extrusion = re.compile(r'^G1.*X.*Y.*E')
     prog_type = re.compile(r'^;TYPE:')
@@ -320,6 +320,13 @@ def process_gcode(
         for currentLine in gcodeFile:
             writtenToFile = 0
             
+            # ignore type custom since start gcode is irrelevant
+            if currentLine.startswith(";TYPE:"):
+                if currentLine.startswith(";TYPE:Custom"):
+                    ignore_pos = True
+                else:
+                    ignore_pos = False
+
             if is_begin_layer_line(currentLine):
                 perimeterSegments = []
                 
@@ -512,7 +519,8 @@ def process_gcode(
 
             # line with move
             if prog_move.search(currentLine):
-                lastPosition = getXY(currentLine)
+                if not ignore_pos:
+                    lastPosition = getXY(currentLine)
 
             # write uneditedLine
             if writtenToFile == 0:
@@ -595,6 +603,7 @@ try:
 except Exception:
     traceback.print_exc()
     
+    print('currentLine:', currentLine)
     print('Press enter to close window')
     print('If you need help open an issue on my Github at:https://github.com/WatchingWatches/GradientInfill')
     print('Please share all of the settings you were using and the error message')
