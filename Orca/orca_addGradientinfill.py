@@ -469,6 +469,7 @@ def process_gcode(
                                     )
                                     newE = float(element[1:]) * flow_factor
                                     # calculate original infill flow once per layer
+                                    # TODO better calculation of the flow not just one element!
                                     if infill_begin:
                                         segmentLength = get_points_distance(lastPosition, currentPosition)
                                         infill_flow = (float(infill_speed)*(d_f**2)*pi*float(element[1:])) / (4*segmentLength*60)
@@ -505,9 +506,10 @@ def process_gcode(
                             for element in splitLine:
                                 if "E" in element:
                                     newE = float(element[1:]) * min_flow / 100
+                                    outPutLine = outPutLine + "E" + str(round(newE, 5)) + "\n"
                                 else:
                                     outPutLine = outPutLine + element + " "
-                            outPutLine = outPutLine + "E" + str(round(newE, 5)) + "\n"
+                            
                             lines.append(outPutLine)
                             writtenToFile = 1
 
