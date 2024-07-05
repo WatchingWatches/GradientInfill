@@ -312,6 +312,7 @@ def process_gcode(
     prog_type = re.compile(r'^;TYPE:')
     
     edit = 0
+    ignore_pos = True
     currentSection = Section.NOTHING
     lastPosition = Point2D(-10000, -10000)
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
