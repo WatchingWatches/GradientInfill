@@ -51,6 +51,14 @@ class InfillType(Enum):
     SMALL_SEGMENTS = 1  # infill with small segments like honeycomb or gyroid
     LINEAR = 2  # linear infill like rectilinear or triangles
 
+class Slicer(Enum):
+    """Enum for slicer"""
+
+    ORCA = 1 # if you use a bambulab printer choose Bambu
+    BAMBU = 2
+    PRUSA = 3
+    CURA = 4 # untested TODO
+
 
 Point2D = namedtuple('Point2D', 'x y')
 Segment = namedtuple('Segment', 'point1 point2')
@@ -58,28 +66,29 @@ Segment = namedtuple('Segment', 'point1 point2')
 # EDIT this section for your creation parameters
 # if the filenames have the same name the original file will be overwritten
 # names only used if run_in_slicer = False
-INPUT_FILE_NAME = "no_script_Cube_PLA_59m39s.gcode"
-OUTPUT_FILE_NAME = "orca_script_result.gcode"
+INPUT_FILE_NAME: str = "no_script_Cube_PLA_59m39s.gcode"
+OUTPUT_FILE_NAME: str = "orca_script_result.gcode"
 
 # Warning there is just one file as output, which means you can't compare it to the original
-run_in_slicer = True
-dialog_in_slicer = True # use different parameters inside of the slicer via dialog else the following values are used
+run_in_slicer: bool = True
+dialog_in_slicer: bool = True # use different parameters inside of the slicer via dialog else the following values are used
+REMOVE_SLICER_INFO: bool = True # remove first line with slicer information for realistic gcode preview only for prusa slicer
 
-HOTEND_MAX_FLOW = 25.0  # maximum flow of the hotend in mm^3/s
-D_F = 1.75  # diameter of the filament in mm
+HOTEND_MAX_FLOW: float = 25.0  # maximum flow of the hotend in mm^3/s
+D_F: float = 1.75  # diameter of the filament in mm
 # this setting is only relevant for SMALL_SEGMENTS infill when disabled the infill outside of the GRADIENT_THICKNESS isn't changed
-THIN_INNER_CORE = True 
+THIN_INNER_CORE: bool = True 
 
-INFILL_TYPE = InfillType.SMALL_SEGMENTS
+INFILL_TYPE: InfillType = InfillType.SMALL_SEGMENTS
+SLICER_TYPE: Slicer = Slicer.ORCA # if you use a bambulab printer with Orca slicer choose Bambu!
 
-MAX_FLOW = 250.0  # maximum extrusion flow
-MIN_FLOW = 50.0  # minimum extrusion flow
-GRADIENT_THICKNESS = 6.0  # thickness of the gradient (max to min) in mm
-GRADIENT_DISCRETIZATION = 4.0  # only applicable for linear infills; number of segments within the
+MAX_FLOW: float = 250.0  # maximum extrusion flow
+MIN_FLOW: float = 50.0  # minimum extrusion flow
+GRADIENT_THICKNESS: float = 6.0  # thickness of the gradient (max to min) in mm
+GRADIENT_DISCRETIZATION: float = 4.0  # only applicable for linear infills; number of segments within the
 # gradient(segmentLength=gradientThickness / gradientDiscretization); use sensible values to not overload the printer
 
 # End edit
-
 
 
 class Section(Enum):
@@ -180,7 +189,6 @@ def getXY(currentLine: str) -> Point2D:
     return Point2D(float(elementX), float(elementY))
     
 
-
 def mapRange(a: Tuple[float, float], b: Tuple[float, float], s: float) -> float:
     """Calculate a multiplier for the extrusion value from the distance to the perimeter.
 
@@ -224,7 +232,13 @@ def is_begin_layer_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of a layer section
     """
-    return line.startswith(";LAYER_CHANGE")
+    if SLICER_TYPE == Slicer.ORCA or SLICER_TYPE == Slicer.PRUSA:
+        return line.startswith(";LAYER_CHANGE")
+    elif SLICER_TYPE == Slicer.BAMBU:
+        return line.startswith("; CHANGE_LAYER")
+    elif SLICER_TYPE == Slicer.CURA:
+        return line.startswith(";LAYER:")
+
 
 # changed
 def is_begin_inner_wall_line(line: str) -> bool:
@@ -236,7 +250,15 @@ def is_begin_inner_wall_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of an inner wall section
     """
-    return line.startswith(";TYPE:Inner wall")
+    if SLICER_TYPE == Slicer.ORCA:
+        return line.startswith(";TYPE:Inner wall")
+    elif SLICER_TYPE == Slicer.PRUSA:
+        return line.startswith(";TYPE:Perimeter")
+    elif SLICER_TYPE == Slicer.BAMBU:
+        return line.startswith("; FEATURE: Inner wall")
+    elif SLICER_TYPE == Slicer.CURA:
+        return line.startswith(";TYPE:WALL-INNER")
+
 
 # changed
 def is_end_inner_wall_line(line: str) -> bool:
@@ -248,7 +270,15 @@ def is_end_inner_wall_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of an outer wall section
     """
-    return line.startswith(";TYPE:Outer wall")
+    if SLICER_TYPE == Slicer.ORCA:
+        return line.startswith(";TYPE:Outer wall")
+    elif SLICER_TYPE == Slicer.PRUSA:
+        return line.startswith(";TYPE:External perimeter")
+    elif SLICER_TYPE == Slicer.BAMBU:
+        return line.startswith("; FEATURE: Outer wall")
+    elif SLICER_TYPE == Slicer.CURA:
+        return line.startswith(";TYPE:WALL-OUTER")
+
 
 # fine
 def is_extrusion_line(line: str) -> bool:
@@ -272,7 +302,31 @@ def is_begin_infill_segment_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of an infill section
     """
-    return line.startswith(";TYPE:Sparse infill")
+    if SLICER_TYPE == Slicer.ORCA:
+        return line.startswith(";TYPE:Sparse infill")
+    elif SLICER_TYPE == Slicer.PRUSA:
+        return line.startswith(";TYPE:Internal infill")
+    elif SLICER_TYPE == Slicer.BAMBU:
+        return line.startswith("; FEATURE: Sparse infill")
+    elif SLICER_TYPE == Slicer.CURA:
+        return line.startswith(";TYPE:FILL")
+
+def is_start_gcode(line: str)-> bool:
+    """Check if current line indicates start gcode.
+
+    Args:
+        line (str): Gcode line
+
+    Returns:
+        bool: True if the line is the start gcode
+    """
+    if SLICER_TYPE == Slicer.ORCA or SLICER_TYPE == Slicer.PRUSA:
+        return line.startswith(";TYPE:Custom")
+    elif SLICER_TYPE == Slicer.BAMBU:
+        return line.startswith("; FEATURE: Custom")
+    elif SLICER_TYPE == Slicer.CURA:
+        return False #TODO
+        #return line.startswith(";Generated with Cura_SteamEngine")
 
 def control_flow(hotend_max_flow: float, extrusionLength:float, distance:float, d_f:float)-> str:
     """Calculate new feedrate to stay at the limit of the hotend maximum flow.
@@ -309,30 +363,42 @@ def process_gcode(
     global currentLine
     prog_move = re.compile(r'^G[0-1].*X.*Y')
     prog_extrusion = re.compile(r'^G1.*X.*Y.*E')
-    prog_type = re.compile(r'^;TYPE:')
+    if SLICER_TYPE != Slicer.BAMBU:
+        prog_type = re.compile(r'^;TYPE:')
+    else:
+        prog_type = re.compile(r'^; FEATURE:')
     
     edit = 0
     ignore_pos = True
+    is_old_speed = False #TODO
     currentSection = Section.NOTHING
     lastPosition = Point2D(-10000, -10000)
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
 
     with open(input_file_name, "r") as gcodeFile:
-        for currentLine in gcodeFile:
-            writtenToFile = 0
-            
-            # ignore type custom since start gcode is irrelevant
-            if currentLine.startswith(";TYPE:"):
-                if currentLine.startswith(";TYPE:Custom"):
-                    ignore_pos = True
-                else:
-                    ignore_pos = False
+        if SLICER_TYPE == Slicer.PRUSA and REMOVE_SLICER_INFO:
+            first_line = True # delete first line due to incorrect gcode preview
+        else:
+            first_line = False
 
+        for currentLine in gcodeFile:
+            if first_line:
+                first_line = False
+                continue
+
+            writtenToFile = 0
+                
             if is_begin_layer_line(currentLine):
                 perimeterSegments = []
                 
             # search if it indicates a type
             if prog_type.search(currentLine):
+                # ignore start gcode
+                if is_start_gcode(currentLine):
+                    ignore_pos = True
+                else:
+                    ignore_pos = False
+
                 if is_begin_inner_wall_line(currentLine):
                     currentSection = Section.INNER_WALL
                     
@@ -513,17 +579,15 @@ def process_gcode(
                             
                             lines.append(outPutLine)
                             writtenToFile = 1
-
-                            
+ 
                 # infill type resetted broke the script
                 # in the adaption it's implemented by searching by irrelevant type
                 #if ";" in currentLine:
                 #    currentSection = Section.NOTHING
 
             # line with move
-            if prog_move.search(currentLine):
-                if not ignore_pos:
-                    lastPosition = getXY(currentLine)
+            if prog_move.search(currentLine) and not ignore_pos:
+                lastPosition = getXY(currentLine)
 
             # write uneditedLine
             if writtenToFile == 0:
@@ -537,8 +601,9 @@ def process_gcode(
                 
         # check if the script did anything
         if edit == 0:
-            print('No changes were made to the file! Press enter and check the script')
+            print('No changes were made to the file!')
             if run_in_slicer:
+                print('Press enter and check the script')
                 input()
 
 
@@ -547,69 +612,70 @@ def process_gcode(
 #        INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
 #    )
 
-# use try method to get error message from script
-try:
-    if run_in_slicer:
-        file_path = sys.argv[1] # the path of the gcode given by the slicer
-        if dialog_in_slicer:
-            # repeat process up to 3 times if inserted values are incorrect
-            for _ in range(3):
-                print('script called:', sys.argv[0],'\n')
-                print('Use default values (declared in the script)? [y] to proceed')
-                default = str(input())
-                if default == 'y':
-                    break
-                
-                print('Input MAX_FLOW and press enter (default 350)')
-                MAX_FLOW = int(input())
-                
-                print('Input MIN_FLOW and press enter (default 50)')
-                MIN_FLOW = int(input())
-                
-                print('Input GRADIENT_THICKNESS and press enter (default 6.0)')
-                GRADIENT_THICKNESS = float(input())
-                
-                print('Input INFILL_TYPE choose [0] for SMALL_SEGMENTS and [1] for LINEAR:')
-                choose_infill_type = int(input())
-                if choose_infill_type == 0:
-                    INFILL_TYPE = InfillType.SMALL_SEGMENTS
-                    print('Enable THIN_INNER_CORE ? [y] to enable')
-                    if str(input()) == 'y':
-                        THIN_INNER_CORE = True
-                    else:
-                        THIN_INNER_CORE = False
-                else:
-                    INFILL_TYPE = InfillType.LINEAR
-                    print('Input GRADIENT_DISCRETIZATION and press enter (default 4.0)')
-                    GRADIENT_DISCRETIZATION = float(input())
+if __name__ == '__main__':
+    # use try method to get error message from script
+    try:
+        if run_in_slicer:
+            file_path = sys.argv[1] # the path of the gcode given by the slicer
+            if dialog_in_slicer:
+                # repeat process up to 3 times if inserted values are incorrect
+                for _ in range(3):
+                    print('script called:', sys.argv[0],'\n')
+                    print('Use default values (declared in the script)? [y] to proceed')
+                    default = str(input())
+                    if default == 'y':
+                        break
                     
-                print('Are all values correct? [y] to proceed')
-                correct = str(input())
-                
-                if correct == 'y':
-                    print('Script is running please wait...')
-                    break
-        start = time.time()   
-        # changed out path
-        process_gcode(
-            file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
-        )
+                    print('Input MAX_FLOW and press enter (default 350)')
+                    MAX_FLOW = int(input())
+                    
+                    print('Input MIN_FLOW and press enter (default 50)')
+                    MIN_FLOW = int(input())
+                    
+                    print('Input GRADIENT_THICKNESS and press enter (default 6.0)')
+                    GRADIENT_THICKNESS = float(input())
+                    
+                    print('Input INFILL_TYPE choose [0] for SMALL_SEGMENTS and [1] for LINEAR:')
+                    choose_infill_type = int(input())
+                    if choose_infill_type == 0:
+                        INFILL_TYPE = InfillType.SMALL_SEGMENTS
+                        print('Enable THIN_INNER_CORE ? [y] to enable')
+                        if str(input()) == 'y':
+                            THIN_INNER_CORE = True
+                        else:
+                            THIN_INNER_CORE = False
+                    else:
+                        INFILL_TYPE = InfillType.LINEAR
+                        print('Input GRADIENT_DISCRETIZATION and press enter (default 4.0)')
+                        GRADIENT_DISCRETIZATION = float(input())
+                        
+                    print('Are all values correct? [y] to proceed')
+                    correct = str(input())
+                    
+                    if correct == 'y':
+                        print('Script is running please wait...')
+                        break
+            start = time.time()   
+            # changed out path
+            process_gcode(
+                file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
+            )
+            
+        else:
+            start = time.time()
+            process_gcode(
+                INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
+            )
+            
+        print('Time to excecute:',time.time()- start) 
         
-    else:
-        start = time.time()
-        process_gcode(
-            INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
-        )
+    except Exception:
+        traceback.print_exc()
         
-    print('Time to excecute:',time.time()- start) 
-    
-except Exception:
-    traceback.print_exc()
-    
-    print('currentLine:', currentLine)
-    print('Press enter to close window')
-    print('If you need help open an issue on my Github at:https://github.com/WatchingWatches/GradientInfill')
-    print('Please share all of the settings you were using and the error message')
+        print('currentLine:', currentLine)
+        print('Press enter to close window')
+        print('If you need help open an issue on my Github at:https://github.com/WatchingWatches/GradientInfill')
+        print('Please share a 3mf file with all of the settings you were using and the error message')
 
-    if run_in_slicer:
-        input()
+        if run_in_slicer:
+            input()
