@@ -54,10 +54,11 @@ class InfillType(Enum):
 class Slicer(Enum):
     """Enum for slicer"""
 
+    SEARCH = 0 # for search slicer feature
     ORCA = 1 # if you use a bambulab printer choose Bambu
     BAMBU = 2
     PRUSA = 3
-    CURA = 4 # untested TODO
+    CURA = 4 
 
 
 Point2D = namedtuple('Point2D', 'x y')
@@ -66,21 +67,22 @@ Segment = namedtuple('Segment', 'point1 point2')
 # EDIT this section for your creation parameters
 # if the filenames have the same name the original file will be overwritten
 # names only used if run_in_slicer = False
-INPUT_FILE_NAME: str = "no_script_Cube_PLA_59m39s.gcode"
-OUTPUT_FILE_NAME: str = "orca_script_result.gcode"
+INPUT_FILE_NAME: str = r"C:\Users\bjans\Downloads\Bambuslicer_ender_Cube.gcode"
+OUTPUT_FILE_NAME: str = r"C:\Users\bjans\Downloads\gradinfilltest_res.gcode"
 
-# Warning there is just one file as output, which means you can't compare it to the original
-run_in_slicer: bool = True
+# Warning there is just one file as output from the slicer, which means you can't compare it to the original
+run_in_slicer: bool = False
 dialog_in_slicer: bool = True # use different parameters inside of the slicer via dialog else the following values are used
-REMOVE_SLICER_INFO: bool = True # remove first line with slicer information for realistic gcode preview only for prusa slicer
+REMOVE_SLICER_INFO: bool = True # remove first line with slicer information for realistic gcode preview only for prusa, orca slicer
 
-HOTEND_MAX_FLOW: float = 25.0  # maximum flow of the hotend in mm^3/s
+HOTEND_MAX_FLOW: float = 15.0  # maximum flow of the hotend in mm^3/s
 D_F: float = 1.75  # diameter of the filament in mm
 # this setting is only relevant for SMALL_SEGMENTS infill when disabled the infill outside of the GRADIENT_THICKNESS isn't changed
 THIN_INNER_CORE: bool = True 
 
 INFILL_TYPE: InfillType = InfillType.SMALL_SEGMENTS
-SLICER_TYPE: Slicer = Slicer.ORCA # if you use a bambulab printer with Orca slicer choose Bambu!
+# automatically search for the slicer with: Slicer.SEARCH
+Slicer_Type: Slicer = Slicer.SEARCH # if manually assigned and you use a bambulab printer with Orca slicer choose Bambu!
 
 MAX_FLOW: float = 250.0  # maximum extrusion flow
 MIN_FLOW: float = 50.0  # minimum extrusion flow
@@ -232,11 +234,11 @@ def is_begin_layer_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of a layer section
     """
-    if SLICER_TYPE == Slicer.ORCA or SLICER_TYPE == Slicer.PRUSA:
+    if Slicer_Type == Slicer.ORCA or Slicer_Type == Slicer.PRUSA:
         return line.startswith(";LAYER_CHANGE")
-    elif SLICER_TYPE == Slicer.BAMBU:
+    elif Slicer_Type == Slicer.BAMBU:
         return line.startswith("; CHANGE_LAYER")
-    elif SLICER_TYPE == Slicer.CURA:
+    elif Slicer_Type == Slicer.CURA:
         return line.startswith(";LAYER:")
 
 
@@ -250,13 +252,13 @@ def is_begin_inner_wall_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of an inner wall section
     """
-    if SLICER_TYPE == Slicer.ORCA:
+    if Slicer_Type == Slicer.ORCA:
         return line.startswith(";TYPE:Inner wall")
-    elif SLICER_TYPE == Slicer.PRUSA:
+    elif Slicer_Type == Slicer.PRUSA:
         return line.startswith(";TYPE:Perimeter")
-    elif SLICER_TYPE == Slicer.BAMBU:
+    elif Slicer_Type == Slicer.BAMBU:
         return line.startswith("; FEATURE: Inner wall")
-    elif SLICER_TYPE == Slicer.CURA:
+    elif Slicer_Type == Slicer.CURA:
         return line.startswith(";TYPE:WALL-INNER")
 
 
@@ -270,13 +272,13 @@ def is_end_inner_wall_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of an outer wall section
     """
-    if SLICER_TYPE == Slicer.ORCA:
+    if Slicer_Type == Slicer.ORCA:
         return line.startswith(";TYPE:Outer wall")
-    elif SLICER_TYPE == Slicer.PRUSA:
+    elif Slicer_Type == Slicer.PRUSA:
         return line.startswith(";TYPE:External perimeter")
-    elif SLICER_TYPE == Slicer.BAMBU:
+    elif Slicer_Type == Slicer.BAMBU:
         return line.startswith("; FEATURE: Outer wall")
-    elif SLICER_TYPE == Slicer.CURA:
+    elif Slicer_Type == Slicer.CURA:
         return line.startswith(";TYPE:WALL-OUTER")
 
 
@@ -302,13 +304,13 @@ def is_begin_infill_segment_line(line: str) -> bool:
     Returns:
         bool: True if the line is the start of an infill section
     """
-    if SLICER_TYPE == Slicer.ORCA:
+    if Slicer_Type == Slicer.ORCA:
         return line.startswith(";TYPE:Sparse infill")
-    elif SLICER_TYPE == Slicer.PRUSA:
+    elif Slicer_Type == Slicer.PRUSA:
         return line.startswith(";TYPE:Internal infill")
-    elif SLICER_TYPE == Slicer.BAMBU:
+    elif Slicer_Type == Slicer.BAMBU:
         return line.startswith("; FEATURE: Sparse infill")
-    elif SLICER_TYPE == Slicer.CURA:
+    elif Slicer_Type == Slicer.CURA:
         return line.startswith(";TYPE:FILL")
 
 def is_start_gcode(line: str)-> bool:
@@ -320,11 +322,11 @@ def is_start_gcode(line: str)-> bool:
     Returns:
         bool: True if the line is the start gcode
     """
-    if SLICER_TYPE == Slicer.ORCA or SLICER_TYPE == Slicer.PRUSA:
+    if Slicer_Type == Slicer.ORCA or Slicer_Type == Slicer.PRUSA:
         return line.startswith(";TYPE:Custom")
-    elif SLICER_TYPE == Slicer.BAMBU:
+    elif Slicer_Type == Slicer.BAMBU:
         return line.startswith("; FEATURE: Custom")
-    elif SLICER_TYPE == Slicer.CURA:
+    elif Slicer_Type == Slicer.CURA:
         return False #TODO
         #return line.startswith(";Generated with Cura_SteamEngine")
 
@@ -360,13 +362,13 @@ def process_gcode(
     thin_inner_core: bool,
 ) -> None:
     """Parse input Gcode file and modify infill portions with an extrusion width gradient."""
-    global currentLine
+    global currentLine, Slicer_Type
     prog_move = re.compile(r'^G[0-1].*X.*Y')
     prog_extrusion = re.compile(r'^G1.*X.*Y.*E')
-    if SLICER_TYPE != Slicer.BAMBU:
-        prog_type = re.compile(r'^;TYPE:')
-    else:
+    if Slicer_Type == Slicer.BAMBU:
         prog_type = re.compile(r'^; FEATURE:')
+    else:
+        prog_type = re.compile(r'^;TYPE:')
     
     edit = 0
     ignore_pos = True
@@ -376,15 +378,33 @@ def process_gcode(
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
 
     with open(input_file_name, "r") as gcodeFile:
-        if SLICER_TYPE == Slicer.PRUSA and REMOVE_SLICER_INFO:
-            first_line = True # delete first line due to incorrect gcode preview
-        else:
-            first_line = False
-
         for currentLine in gcodeFile:
-            if first_line:
-                first_line = False
-                continue
+            # find the slicer automatically
+            if Slicer_Type == Slicer.SEARCH:
+                if currentLine.startswith("; generated by PrusaSlicer"):
+                    Slicer_Type = Slicer.PRUSA
+                    prog_type = re.compile(r'^;TYPE:')
+                    if REMOVE_SLICER_INFO:
+                        continue # delete first line due to incorrect gcode preview
+
+                elif currentLine.startswith("; BambuStudio"):
+                    Slicer_Type = Slicer.BAMBU
+                    prog_type = re.compile(r'^; FEATURE:')
+
+                elif currentLine.startswith(";Generated with Cura_SteamEngine"):
+                    Slicer_Type = Slicer.CURA
+                    prog_type = re.compile(r'^;TYPE:')
+
+                elif currentLine.startswith("; generated by OrcaSlicer"):
+                    Slicer_Type = Slicer.ORCA
+                    prog_type = re.compile(r'^;TYPE:')
+                    if REMOVE_SLICER_INFO:
+                        continue # delete first line due to incorrect gcode preview
+                    
+            # check if Orca slicer with bambu printer    
+            if Slicer_Type == Slicer.ORCA and currentLine.startswith("; printer_model = Bambu"):
+                Slicer_Type = Slicer.BAMBU
+                prog_type = re.compile(r'^; FEATURE:')
 
             writtenToFile = 0
                 
@@ -393,7 +413,10 @@ def process_gcode(
                 
             # search if it indicates a type
             if prog_type.search(currentLine):
-                # ignore start gcode
+                if Slicer_Type == Slicer.SEARCH:
+                    raise SyntaxError("Slicer not found.")
+                    
+                # ignore start or end gcode
                 if is_start_gcode(currentLine):
                     ignore_pos = True
                 else:
@@ -408,13 +431,15 @@ def process_gcode(
 
                 elif is_begin_infill_segment_line(currentLine):
                     currentSection = Section.INFILL
-                    lines.append(currentLine)
-                    continue
+                
                 # irrelevent type, this was in the cura version searching for ; at the end
                 else:
                     currentSection = Section.NOTHING
+
+                # write to file and continue
+                lines.append(currentLine)
+                continue
                     
-                
             if currentSection == Section.INNER_WALL and is_extrusion_line(currentLine):
                 perimeterSegments.append(Segment(getXY(currentLine), lastPosition))
 
@@ -536,8 +561,8 @@ def process_gcode(
                                     )
                                     newE = float(element[1:]) * flow_factor
                                     # calculate original infill flow once per layer
-                                    # TODO better calculation of the flow not just one element!
                                     if infill_begin:
+                                        # TODO better calculation of the flow not just one element!
                                         segmentLength = get_points_distance(lastPosition, currentPosition)
                                         infill_flow = (float(infill_speed)*(d_f**2)*pi*float(element[1:])) / (4*segmentLength*60)
 
@@ -602,80 +627,81 @@ def process_gcode(
         # check if the script did anything
         if edit == 0:
             print('No changes were made to the file!')
+            print('Is this the right slicer?', Slicer_Type)
+            print('if you use Orca slicer with a Bambu printer it should be BAMBU')
+
             if run_in_slicer:
                 print('Press enter and check the script')
                 input()
 
 
 #if __name__ == '__main__':
-#    process_gcode(
-#        INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION
-#    )
-
-if __name__ == '__main__':
     # use try method to get error message from script
-    try:
-        if run_in_slicer:
-            file_path = sys.argv[1] # the path of the gcode given by the slicer
-            if dialog_in_slicer:
-                # repeat process up to 3 times if inserted values are incorrect
-                for _ in range(3):
-                    print('script called:', sys.argv[0],'\n')
-                    print('Use default values (declared in the script)? [y] to proceed')
-                    default = str(input())
-                    if default == 'y':
-                        break
-                    
-                    print('Input MAX_FLOW and press enter (default 350)')
-                    MAX_FLOW = int(input())
-                    
-                    print('Input MIN_FLOW and press enter (default 50)')
-                    MIN_FLOW = int(input())
-                    
-                    print('Input GRADIENT_THICKNESS and press enter (default 6.0)')
-                    GRADIENT_THICKNESS = float(input())
-                    
-                    print('Input INFILL_TYPE choose [0] for SMALL_SEGMENTS and [1] for LINEAR:')
-                    choose_infill_type = int(input())
-                    if choose_infill_type == 0:
-                        INFILL_TYPE = InfillType.SMALL_SEGMENTS
-                        print('Enable THIN_INNER_CORE ? [y] to enable')
-                        if str(input()) == 'y':
-                            THIN_INNER_CORE = True
-                        else:
-                            THIN_INNER_CORE = False
+try:
+    if run_in_slicer:
+        file_path = sys.argv[1] # the path of the gcode given by the slicer
+        if dialog_in_slicer:
+            # repeat process up to 3 times if inserted values are incorrect
+            for _ in range(3):
+                print('script called:', sys.argv[0],'\n')
+                print('Use default values (declared in the script)? [y] to proceed')
+                default = str(input())
+                if default == 'y':
+                    print('Script is running please wait...')
+                    break
+                
+                print('Input MAX_FLOW and press enter (default 350)')
+                MAX_FLOW = int(input())
+                
+                print('Input MIN_FLOW and press enter (default 50)')
+                MIN_FLOW = int(input())
+                
+                print('Input GRADIENT_THICKNESS and press enter (default 6.0)')
+                GRADIENT_THICKNESS = float(input())
+                
+                print('Input INFILL_TYPE choose [0] for SMALL_SEGMENTS and [1] for LINEAR:')
+                choose_infill_type = int(input())
+                if choose_infill_type == 0:
+                    INFILL_TYPE = InfillType.SMALL_SEGMENTS
+                    print('Enable THIN_INNER_CORE ? [y] to enable')
+                    if str(input()) == 'y':
+                        THIN_INNER_CORE = True
                     else:
-                        INFILL_TYPE = InfillType.LINEAR
-                        print('Input GRADIENT_DISCRETIZATION and press enter (default 4.0)')
-                        GRADIENT_DISCRETIZATION = float(input())
-                        
-                    print('Are all values correct? [y] to proceed')
-                    correct = str(input())
+                        THIN_INNER_CORE = False
+                else:
+                    INFILL_TYPE = InfillType.LINEAR
+                    print('Input GRADIENT_DISCRETIZATION and press enter (default 4.0)')
+                    GRADIENT_DISCRETIZATION = float(input())
                     
-                    if correct == 'y':
-                        print('Script is running please wait...')
-                        break
-            start = time.time()   
-            # changed out path
-            process_gcode(
-                file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
-            )
-            
-        else:
-            start = time.time()
-            process_gcode(
-                INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
-            )
-            
-        print('Time to excecute:',time.time()- start) 
+                print('Are all values correct? [y] to proceed')
+                correct = str(input())
+                
+                if correct == 'y':
+                    print('Script is running please wait...')
+                    break
+        start = time.time()   
+        # changed out path
+        process_gcode(
+            file_path, file_path, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
+        )
         
-    except Exception:
-        traceback.print_exc()
+    else:
+        start = time.time()
+        process_gcode(
+            INPUT_FILE_NAME, OUTPUT_FILE_NAME, INFILL_TYPE, MAX_FLOW, MIN_FLOW, GRADIENT_THICKNESS, GRADIENT_DISCRETIZATION, HOTEND_MAX_FLOW, D_F, THIN_INNER_CORE
+        )
         
-        print('currentLine:', currentLine)
-        print('Press enter to close window')
-        print('If you need help open an issue on my Github at:https://github.com/WatchingWatches/GradientInfill')
-        print('Please share a 3mf file with all of the settings you were using and the error message')
+    print('Time to excecute:',time.time()- start) 
+    
+except Exception:
+    traceback.print_exc()
+    
+    print('currentLine:', currentLine)
+    print('Press enter to close window')
+    print('Is this the right slicer?', Slicer_Type)
+    print('if you use Orca slicer with a Bambu printer it should be BAMBU')
+    print('If you need help open an issue on my Github at:https://github.com/WatchingWatches/GradientInfill')
+    print('Please share a 3mf file with all of the settings you were using and the error message')
 
-        if run_in_slicer:
-            input()
+    if run_in_slicer:
+        input()
