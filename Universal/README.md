@@ -47,6 +47,7 @@ Also ensure, that the filament override is disabled.
 ![run script](pictures/image-2.png)
 
 Insert the path to your python.exe followed by the path to the python script in print settings -> output options.
+Not possible with Cura use the script of 5axes instead for slicer integration. If you want to use my new features run the script from an IDE. 
 
 ## Running script:
 The script gets called after the slicing process. 
