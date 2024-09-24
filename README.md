@@ -7,7 +7,11 @@ Watch my YouTube video about it: https://youtu.be/hq53gsYREHU
 
 # Important Notes
 
+<<<<<<< HEAD
 In its current for it only works with G-Code files generated with CURA, Prusa and Orca Slicer due to the comments the slicer puts into the G-Code files.
+=======
+In its current for it only works with G-Code files generated with CURA, Prusa, Bambu and Orca Slicer due to the comments the slicer puts into the G-Code files.
+>>>>>>> limit_volumetricflow
 Prusa and Orca Slicer have their own folder with detailed instructions.
 
 It is also important to make sure that the "Walls" are printed before the "Infill" ("Infill before Walls" OFF).
@@ -42,4 +46,8 @@ Sample part with a Gradient distance set to 8 mm :
 ![82570108_1223017127904648_3642722292435255296_o](https://user-images.githubusercontent.com/11015345/72863337-8e827580-3cd0-11ea-9681-e1de7e2071c2.jpg)
 
 # GradientInfill by WatchingWatches
+<<<<<<< HEAD
 Adapted version of the script addGradientInfill.py, which works with Prusa and Orca slicer. Both scripts have a own folder with detailed instructions inside of the README file. Also Check the different branches for beta releases with new features.
+=======
+Adapted version of the script addGradientInfill.py, which works with Prusa, Bambu, Cura and Orca slicer. The universal_addGradientinfill.py script automatically recognizes the slicer. The script has a own folder: Universal, with a Readme. Also Check the different branches for beta releases with new features.
+>>>>>>> limit_volumetricflow
