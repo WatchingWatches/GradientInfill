@@ -67,15 +67,15 @@ Segment = namedtuple('Segment', 'point1 point2')
 # EDIT this section for your creation parameters
 # if the filenames have the same name the original file will be overwritten
 # names only used if run_in_slicer = False
-INPUT_FILE_NAME: str = r"C:\Users\bjans\Downloads\Bambuslicer_ender_Cube.gcode"
+INPUT_FILE_NAME: str = r"C:\Users\bjans\Downloads\Supports 10x1mm round anti-skid stickers.3mf\Supports 10x1mm round anti-skid stickers.3mf\plate_1.gcode"
 OUTPUT_FILE_NAME: str = r"C:\Users\bjans\Downloads\gradinfilltest_res.gcode"
 
 # Warning there is just one file as output from the slicer, which means you can't compare it to the original
-run_in_slicer: bool = True
+run_in_slicer: bool = False
 dialog_in_slicer: bool = True # use different parameters inside of the slicer via dialog else the following values are used
 REMOVE_SLICER_INFO: bool = True # remove first line with slicer information for realistic gcode preview only for prusa, orca slicer
 
-HOTEND_MAX_FLOW: float = 15.0  # maximum flow of the hotend in mm^3/s
+HOTEND_MAX_FLOW: float = 20.0  # maximum flow of the hotend in mm^3/s TODO min speed
 D_F: float = 1.75  # diameter of the filament in mm
 # this setting is only relevant for SMALL_SEGMENTS infill when disabled the infill outside of the GRADIENT_THICKNESS isn't changed
 THIN_INNER_CORE: bool = True 
@@ -84,7 +84,7 @@ INFILL_TYPE: InfillType = InfillType.SMALL_SEGMENTS
 # automatically search for the slicer with: Slicer.SEARCH
 Slicer_Type: Slicer = Slicer.SEARCH # if manually assigned and you use a bambulab printer with Orca slicer choose Bambu!
 
-MAX_FLOW: float = 250.0  # maximum extrusion flow
+MAX_FLOW: float = 550.0  # maximum extrusion flow
 MIN_FLOW: float = 50.0  # minimum extrusion flow
 GRADIENT_THICKNESS: float = 6.0  # thickness of the gradient (max to min) in mm
 GRADIENT_DISCRETIZATION: float = 4.0  # only applicable for linear infills; number of segments within the
@@ -498,7 +498,7 @@ def process_gcode(
                                 # check for flow limit
                                 current_flow = infill_flow * flow_factor
                                 if current_flow > hotend_max_flow:
-                                    new_feedrate = control_flow(hotend_max_flow, extrusionLengthPerSegment*flow_factor, gradientDiscretizationLength, d_f, current_flow)
+                                    new_feedrate = control_flow(hotend_max_flow, extrusionLengthPerSegment*flow_factor, gradientDiscretizationLength, d_f)#, current_flow) TODO
                                     lines.append(new_feedrate + get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
                                     is_old_speed = False
                                 elif is_old_speed:
