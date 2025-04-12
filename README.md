@@ -43,3 +43,7 @@ Sample part with a Gradient distance set to 8 mm :
 
 # GradientInfill by WatchingWatches
 Adapted version of the script addGradientInfill.py, which works with Prusa, Bambu, Cura and Orca slicer. The universal_addGradientinfill.py script automatically recognizes the slicer. The script has a own folder: Universal, with a Readme. Also Check the different branches for beta releases with new features.
+
+# Gradient Infill With GUI by Epiphany Printing
+Used WatchingWatches code as a base but trimmed it down to only work on orca as I was having issues with the universal variant running with orca 2.3.0. Added a simple gui to set the settings when the post processing script is ran. 
+![image](https://github.com/user-attachments/assets/04213e1d-880e-4383-a02a-8222477d3ff9)
