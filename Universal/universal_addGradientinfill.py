@@ -20,28 +20,11 @@ from math import pi
 
 __version__ = '1.0'
 
-""" Status comments:
-- fine: no changes needed
-- changed: adapted to different slicer
+"""
 
 Only accepts G1/G0 commands and relative extrusion
 Please read the README.md for slicer settings guide
 
-    
-Features:
-    first line gets removed with slicer information
-        solves issue with incorrect gcode preview in Prusa gcode viewer
-        
-    run the script directly after slicing with input dialog for script variables
-    
-    warns you if no changes were made to the file
-    
-    gives error message inside of the terminal
-    
-Future Features:
-    # TODO
-    automatically search for infill type
-    
 """
 
 class InfillType(Enum):
@@ -65,15 +48,13 @@ Segment = namedtuple('Segment', 'point1 point2')
 
 # EDIT this section for your creation parameters
 # if the filenames have the same name the original file will be overwritten
-# names only used if run_in_slicer = False
-INPUT_FILE_NAME: str = r"C:\Users\bjans\Downloads\Supports 10x1mm round anti-skid stickers.3mf\Supports 10x1mm round anti-skid stickers.3mf\plate_1.gcode"
+# names only used if run in IDE
+INPUT_FILE_NAME: str = r"C:\Users\bjans\Downloads\Torus_PLA_1h20m.gcode"
 OUTPUT_FILE_NAME: str = r"C:\Users\bjans\Downloads\gradinfilltest_res.gcode"
 
 # Warning there is just one file as output from the slicer, which means you can't compare it to the original
-run_in_slicer: bool = True #TODO use argparser to automatically determine
 dialog_in_slicer: bool = True # use different parameters inside of the slicer via dialog else the following values are used
 REMOVE_SLICER_INFO: bool = True # remove first line with slicer information for realistic gcode preview only for prusa, orca slicer
-# TODO min speed
 D_F: float = 1.75  # diameter of the filament in mm
 # this setting is only relevant for SMALL_SEGMENTS infill when disabled the infill outside of the GRADIENT_THICKNESS isn't changed
 THIN_INNER_CORE: bool = True 
@@ -84,7 +65,7 @@ Slicer_Type: Slicer = Slicer.SEARCH # if manually assigned and you use a bambula
 
 MAX_FLOW: float = 250.0  # maximum extrusion flow
 MIN_FLOW: float = 70.0  # minimum extrusion flow
-GRADIENT_THICKNESS: float = 6.0  # thickness of the gradient (max to min) in mm
+GRADIENT_THICKNESS: float = 8.0  # thickness of the gradient (max to min) in mm
 GRADIENT_DISCRETIZATION: float = 4.0  # only applicable for linear infills; number of segments within the
 # gradient(segmentLength=gradientThickness / gradientDiscretization); use sensible values to not overload the printer
 
@@ -369,14 +350,14 @@ def process_gcode(
     
     edit = 0
     ignore_pos = True
-    is_old_speed = False #TODO
+    is_old_speed = False
     currentSection = Section.NOTHING
     lastPosition = Point2D(-float('inf'), -float('inf'))# set infinate start point
     gradientDiscretizationLength = gradient_thickness / gradient_discretization
 
     with open(input_file_name, "r") as gcodeFile:        
         gcode = gcodeFile.readlines()
-        # find the volumetric flow limit of the filament from slicer settings (probaly not compatible with cura)
+        # find the volumetric flow limit of the filament from slicer settings (probaly not compatible with cura) #TODO automatically find infill type
         for line in reversed(gcode):
             if line.startswith('; filament_max_volumetric_speed ='):
                 hotend_max_flow = min(map(float, line.split('=')[-1].split(',')))# different filaments are sperated by , minimum is used
@@ -429,10 +410,6 @@ def process_gcode(
 
                 if is_begin_inner_wall_line(currentLine):
                     currentSection = Section.INNER_WALL
-                    
-                # kann weggelassen werden TODO richtig?
-                elif is_end_inner_wall_line(currentLine):
-                    currentSection = Section.NOTHING
 
                 elif is_begin_infill_segment_line(currentLine):
                     currentSection = Section.INFILL
@@ -453,8 +430,6 @@ def process_gcode(
 
             if currentSection == Section.INFILL:
                 if "F" in currentLine and "G1" in currentLine:
-                    # python3.6+ f-string variant:
-                    # outputFile.write("G1 F{ re.search(r"F(\d*\.?\d*)", currentLine).group(1)) }\n"
                     searchSpeed = re.search(r"F(\d*\.?\d*)", currentLine)
                     if searchSpeed:
                         infill_speed = searchSpeed.group(1)
@@ -480,13 +455,13 @@ def process_gcode(
                             (currentPosition.x - lastPosition.x) / segmentLength * gradientDiscretizationLength,
                             (currentPosition.y - lastPosition.y) / segmentLength * gradientDiscretizationLength,
                         )
-                        # calculate original infill flow once per layer
+                        # calculate original infill flow once per layer TODO might lead to issue with multiple objects with different settings
                         if infill_begin:
                             infill_flow = (float(infill_speed)*(d_f**2)*pi*extrusionLength) / (4*segmentLength*60)
                         else:
                             infill_begin = False
                         if segmentSteps >= 2:
-                            for step in range(int(segmentSteps)):
+                            for _ in range(int(segmentSteps)):
                                 segmentEnd = Point2D(
                                     lastPosition.x + segmentDirection.x, lastPosition.y + segmentDirection.y
                                 )
@@ -506,7 +481,7 @@ def process_gcode(
                                 # check for flow limit
                                 current_flow = infill_flow * flow_factor
                                 if current_flow > hotend_max_flow:
-                                    new_feedrate = control_flow(hotend_max_flow, extrusionLengthPerSegment*flow_factor, gradientDiscretizationLength, d_f)#, current_flow) TODO
+                                    new_feedrate = control_flow(hotend_max_flow, extrusionLengthPerSegment*flow_factor, gradientDiscretizationLength, d_f)
                                     lines.append(new_feedrate + get_extrusion_command(segmentEnd.x, segmentEnd.y, segmentExtrusion))
                                     is_old_speed = False
                                 elif is_old_speed:
@@ -573,7 +548,7 @@ def process_gcode(
                                         segmentLength = get_points_distance(lastPosition, currentPosition)
                                         infill_flow = (float(infill_speed)*(d_f**2)*pi*float(element[1:])) / (4*segmentLength*60)
 
-                                        if infill_flow > hotend_max_flow + 0.5:
+                                        if infill_flow > hotend_max_flow + 0.5: #TODO delete? will trigger if wrong max flow is set only happens with two filaments
                                             print('Your infill flow is higher, than the hotend limit in the script!')
                                             print('Please adjust either your slicer or script settings')
                                             print('Slicer Infill Flow:', infill_flow, 'Script Hotend Max Flow:', hotend_max_flow, '[mm^3/s]')
@@ -612,10 +587,6 @@ def process_gcode(
                             lines.append(outPutLine)
                             writtenToFile = 1
  
-                # infill type resetted broke the script
-                # in the adaption it's implemented by searching by irrelevant type
-                #if ";" in currentLine:
-                #    currentSection = Section.NOTHING
 
             # line with move
             if prog_move.search(currentLine) and not ignore_pos:
@@ -642,10 +613,11 @@ def process_gcode(
                 input()
 
 
-#if __name__ == '__main__':
-    # use try method to get error message from script
 if __name__ == '__main__':
     try:
+        # when more than one argument is parsed it's run by slicer
+        run_in_slicer = len(sys.argv) > 1
+
         if run_in_slicer:
             file_path = sys.argv[1] # the path of the gcode given by the slicer
             if dialog_in_slicer:
